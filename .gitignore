@@ -1,0 +1,44 @@
+# Build output
+target/
+build/
+*.jar
+*.war
+
+# Node / Angular
+node_modules/
+dist/
+.angular/
+npm-debug.log*
+
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+.ipynb_checkpoints/
+
+# ML artefacts: models are built by the notebooks, datasets are downloaded.
+# Never commit either - a repo full of binaries reads badly and the Kaggle
+# licence does not allow redistributing the dataset.
+ml/data/
+ml/models/*.onnx
+ml/models/*.pkl
+ml/models/*.joblib
+
+# IDE
+.idea/
+*.iml
+.vscode/
+.settings/
+.classpath
+.project
+
+# Local config and secrets - never commit
+.env
+*.local.yml
+application-local.yml
+secrets.json
+
+# OS
+.DS_Store
+Thumbs.db

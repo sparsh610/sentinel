@@ -1,0 +1,14 @@
+# Training only. None of this runs in production - the models leave as .onnx files.
+
+numpy
+pandas
+scikit-learn
+xgboost
+matplotlib
+jupyterlab
+
+# ONNX export
+onnx
+skl2onnx
+onnxmltools
+onnxruntime        # to verify the exported model scores identically before handing it over

@@ -1,0 +1,93 @@
+# Architecture
+
+## The flow, end to end
+
+1. **Ingest.** `tx-ingest` accepts a transaction (REST) or replays a file of them, writes it to
+   Postgres and publishes it to the `transactions` Kafka topic.
+2. **Score.** `scoring-service` consumes the topic. For each transaction it runs three ONNX
+   models — the supervised fraud classifier, the Isolation Forest, and the KMeans segment
+   assignment — and combines the signals. Above the threshold it writes an **alert**.
+3. **Investigate.** An analyst opens the alert in the console. The investigation agent in
+   `copilot-service` runs its tools: pull the customer's recent transactions, place the
+   transaction against its peer segment, retrieve the policy clause that applies, and draft a
+   case note citing it.
+4. **Decide.** The analyst reads the draft and the execution trace, then approves or rejects.
+   Above a value threshold a senior approver signs off. The decision, the evidence and the
+   trace are written to the audit log.
+5. **Ask.** At any point the analyst can ask the copilot a free question over the policy corpus
+   ("when does a structuring pattern have to be reported?") and get an answer with citations
+   that open the source paragraph.
+
+## Services
+
+### `tx-ingest` (:8082)
+Owns the transaction and customer tables. Bursty and I/O-bound. Deliberately dumb — it does no
+scoring, so that the scoring model can change without touching ingest.
+
+### `scoring-service` (:8083)
+Loads the `.onnx` files produced by `ml/` at start-up and holds them in memory. CPU-bound,
+steady throughput. Owns the alert table and the scoring threshold.
+
+The **feature contract** between training and serving lives here: the feature order in
+`ml/models/<model>.features.json` must match what the Java feature builder produces. A test
+asserts this, because a silent feature-order mismatch produces plausible, wrong scores — the
+worst possible failure mode.
+
+### `copilot-service` (:8081)
+Two responsibilities that share a vector store:
+
+- **Retrieval.** Policy documents are chunked, embedded and stored in `knowledge` (pgvector).
+  Queries retrieve with a document-level access filter applied, so a restricted document cannot
+  reach a user who is not entitled to it.
+- **The agent.** A planner decides which tools to call; the executor runs them under a step
+  limit and records every step. Tools: `customerHistory`, `peerSegment`, `policyLookup`,
+  `riskScore`, `draftCaseNote`.
+
+Responses stream to the console over SSE.
+
+### `console` (:4200)
+Angular. Three screens: the alert queue, the case view (evidence, draft note, execution trace,
+approve/reject), and the copilot chat. Later, the evaluation page.
+
+## Data
+
+Two schemas in one Postgres instance:
+
+| Schema | Tables |
+|---|---|
+| `sentinel` | `customer`, `transaction`, `alert`, `case`, `case_note`, `audit_event` |
+| `knowledge` | `document`, `document_chunk` (with the `vector` column), `document_acl` |
+
+They are separate so that re-indexing the policy corpus can never touch operational or audit
+data.
+
+## Security model
+
+- **Keycloak** issues tokens; the services are resource servers.
+- Roles: `ANALYST` (work alerts, read non-confidential policy), `SENIOR_APPROVER` (sign off
+  above threshold, read all policy), `ADMIN` (upload documents, manage ACLs).
+- Document ACLs are enforced in the **retrieval filter**, not in the UI. The test that matters
+  is that an `ANALYST` asking a question whose answer lives only in a confidential document gets
+  "I don't have a source for that", not the answer.
+- PII masking sits between the service and the model endpoint. It is applied to model-bound
+  text only — tools still query the database with real identifiers.
+- Every agent run, every approval and every document access writes an `audit_event`.
+
+## Observability
+
+Actuator health and info on every service. OpenTelemetry traces span ingest → Kafka → scoring →
+alert so a single transaction can be followed end to end. Agent runs are traced as one span per
+tool call, which is also what the UI renders as the execution trace.
+
+## Deployment
+
+Local: Docker Compose (this repo). Target: GCP Cloud Run, one service per container, Cloud SQL
+for Postgres, built and deployed by GitHub Actions.
+
+---
+
+## Diagram
+
+The ASCII diagram in the [README](../README.md) is the current source of truth. Replace it with
+a rendered image before sharing the repo — draw it in [Excalidraw](https://excalidraw.com) or
+Mermaid, export to `docs/images/architecture.png`, and embed it in both files.
