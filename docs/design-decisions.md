@@ -140,7 +140,36 @@ stays in the console, behind a human (see §5).
 in the tools themselves rather than at the controller. That is the correct place for it anyway,
 but it is a real constraint to hold on to as tools are added.
 
-## 9. Why both GitHub Actions and a Jenkinsfile
+## 9. Why the model runs locally by default
+
+Ollama is the default and a hosted endpoint is opt-in (the `cloud` profile), rather than the
+other way round. That ordering is the decision, and it is a compliance one.
+
+**What leaves the machine when the `cloud` profile is on:** the analyst's question and the two
+or three excerpts retrieval selected. **What never leaves:** the corpus, because embeddings run
+locally. Embedding covers every document; chat sees only what was retrieved. That is why
+`spring.ai.model.chat` and `spring.ai.model.embedding` are configured separately instead of
+picking one provider for both.
+
+That split reduces exposure. It does not remove it. Retrieved excerpts are real policy text,
+and the question leaks investigative context by itself - "is this structuring pattern
+reportable" says what is being investigated. From week 5 the agent's tools return customer
+history, and then names, IBANs and amounts would be in scope too.
+
+In a bank that is a GDPR Article 44 transfer question and ICT third-party risk under DORA,
+not a preference. Assume a provider logs prompts unless a contract says otherwise. The
+production shapes are self-hosted inference inside the bank's own tenancy, or a contracted
+provider with a data processing agreement, zero retention and in-region processing.
+
+**The control that makes remote inference defensible, and the reason `classification` is
+stamped on every chunk at ingestion:** route on it. `CONFIDENTIAL` chunks force local
+inference; `PUBLIC` and `INTERNAL` may go remote. The copilot degrades to the local model
+rather than leaking. Combined with the PII masking in §6 that is a defensible posture.
+
+Not built yet. The `cloud` profile today is a convenience for demos against the synthetic
+corpus, and it says so in a warning at the top of `application-cloud.yml`.
+
+## 10. Why both GitHub Actions and a Jenkinsfile
 
 **Actions is the CI that runs.** The repository is public, so CI has to execute on every push
 with no infrastructure to maintain and report a badge anyone can see. Nothing about a
@@ -159,7 +188,7 @@ corrupted-artifact failures.
 until it has actually executed at least once (Jenkins in Docker, one green run). An untested
 Jenkinsfile is a claim, not a skill.
 
-## 10. Why Java 21 when JDK 25 is installed
+## 11. Why Java 21 when JDK 25 is installed
 
 The build targets 21 (`maven.compiler.release`). It is the LTS that current enterprise job
 descriptions ask for, and targeting it keeps the project buildable on any JDK from 21 upward

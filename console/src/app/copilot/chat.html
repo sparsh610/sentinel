@@ -1,0 +1,72 @@
+<section class="chat">
+  <div class="transcript">
+    @for (exchange of exchanges(); track $index) {
+      <article class="exchange">
+        <p class="question">{{ exchange.question }}</p>
+
+        @if (exchange.error) {
+          <p class="error" role="alert">{{ exchange.error }}</p>
+        } @else if (!exchange.grounded) {
+          <!-- A refusal is not a result. It must not be styled like one. -->
+          <p class="ungrounded">
+            {{ exchange.answer }}
+            <span class="hint">Nothing in the corpus cleared the similarity threshold.</span>
+          </p>
+        } @else {
+          <p class="answer">
+            @for (segment of segments(exchange.answer); track $index) {
+              @if (segment.marker !== null) {
+                <sup class="marker" [title]="'Source ' + segment.marker">{{ segment.marker }}</sup>
+              } @else {
+                <span>{{ segment.text }}</span>
+              }
+            }
+            @if (exchange.streaming) {
+              <span class="caret" aria-hidden="true"></span>
+            }
+          </p>
+        }
+      </article>
+    } @empty {
+      <p class="placeholder">
+        Ask a question about the ingested policy documents. Every answer cites the clause it
+        came from, and says so plainly when the corpus does not cover the question.
+      </p>
+    }
+  </div>
+
+  @if (latestCitations().length > 0) {
+    <aside class="sources">
+      <h2>Sources</h2>
+      @for (citation of latestCitations(); track citation.marker) {
+        <details class="citation">
+          <summary>
+            <span class="marker">{{ citation.marker }}</span>
+            <span class="title">{{ citation.title }}</span>
+            <span class="score">{{ citation.score | number: '1.2-2' }}</span>
+          </summary>
+          <p class="excerpt">{{ citation.excerpt }}</p>
+        </details>
+      }
+    </aside>
+  }
+
+  <form class="composer" (submit)="$event.preventDefault(); ask()">
+    <textarea
+      [ngModel]="question()"
+      (ngModelChange)="question.set($event)"
+      name="question"
+      rows="2"
+      placeholder="When does a structuring pattern have to be reported?"
+      [disabled]="busy()"
+      (keydown)="onKeydown($event)"
+      aria-label="Question"
+    ></textarea>
+
+    @if (busy()) {
+      <button type="button" class="stop" (click)="stop()">Stop</button>
+    } @else {
+      <button type="submit" [disabled]="!canAsk()">Ask</button>
+    }
+  </form>
+</section>

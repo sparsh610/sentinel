@@ -1,0 +1,61 @@
+SYNTHETIC INTERNAL POLICY - NOT A REAL BANK DOCUMENT
+Sentinel test corpus. Written for development. Do not treat as legal guidance.
+
+AML-01  Customer Due Diligence
+
+AML-01.1  Standard customer due diligence shall be applied before establishing a business
+relationship, and shall comprise identification of the customer, verification of that identity
+from an independent source, and identification of the beneficial owner where the customer is a
+legal person.
+
+AML-01.2  Simplified due diligence may be applied only where the relationship presents a
+demonstrably low risk, and never where the customer is established in a high-risk third
+country.
+
+AML-02  Enhanced Due Diligence
+
+AML-02.1  Enhanced due diligence shall be applied to any politically exposed person, to any
+customer established in a high-risk third country, and to any relationship the risk assessment
+scores above 70.
+
+AML-02.2  Enhanced due diligence requires senior management approval before the relationship is
+established, and the source of funds and source of wealth shall be established and recorded.
+
+AML-03  Transaction Monitoring
+
+AML-03.1  All transactions shall be screened against the monitoring scenarios. A transaction
+that triggers a scenario shall raise an alert for investigation by an analyst.
+
+AML-03.2  An alert shall be dispositioned within five business days. An alert that is not
+dispositioned within that period shall be escalated to the team lead.
+
+AML-04  Structuring
+
+AML-04.1  Structuring is the division of a single transaction into several smaller transactions
+for the purpose of avoiding a reporting threshold.
+
+AML-04.2  Where three or more transactions by the same customer within seven calendar days
+together exceed EUR 10,000, and each individually falls below it, the pattern shall be treated
+as potential structuring and an alert raised.
+
+AML-04.3  A potential structuring pattern that the analyst confirms shall be reported to the
+Financial Intelligence Unit without delay, and in any event within 24 hours of confirmation.
+
+AML-05  Reporting
+
+AML-05.1  A suspicious activity report shall be submitted where there is knowledge, suspicion,
+or reasonable grounds to suspect that funds are the proceeds of criminal activity.
+
+AML-05.2  A suspicious activity report shall be approved by a senior approver before
+submission. An analyst may draft a report but may not submit one.
+
+AML-05.3  The customer shall not be informed that a report has been made. Tipping off is a
+criminal offence.
+
+AML-06  Record Keeping
+
+AML-06.1  Due diligence records and transaction records shall be retained for five years from
+the end of the business relationship or the date of the transaction, whichever is later.
+
+AML-06.2  Records shall be retrievable within a reasonable period on request from a competent
+authority.

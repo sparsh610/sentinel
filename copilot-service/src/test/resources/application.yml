@@ -1,6 +1,32 @@
-# Keeps the context-load smoke test from needing a live database.
+# Keeps the context smoke test from needing a live Postgres or Ollama.
+# The beans the application actually uses (VectorStore, ChatModel, DocumentRepository) are
+# supplied as mocks by the test itself.
+#
+# This file shadows src/main/resources/application.yml entirely, so the model selectors have
+# to be repeated here - the OpenAI starter would otherwise autoconfigure speech, image and
+# moderation models and fail the context for want of an API key.
 spring:
+  ai:
+    model:
+      chat: ollama
+      embedding: ollama
+      audio:
+        speech: none
+        transcription: none
+      image: none
+      moderation: none
+
   autoconfigure:
     exclude:
       - org.springframework.boot.autoconfigure.jdbc.DataSourceAutoConfiguration
+      - org.springframework.boot.autoconfigure.jdbc.DataSourceTransactionManagerAutoConfiguration
       - org.springframework.boot.autoconfigure.orm.jpa.HibernateJpaAutoConfiguration
+      - org.springframework.boot.autoconfigure.data.jpa.JpaRepositoriesAutoConfiguration
+      - org.springframework.boot.autoconfigure.flyway.FlywayAutoConfiguration
+
+sentinel:
+  copilot:
+    chunk-size-tokens: 500
+    min-chunk-size-chars: 350
+    top-k: 6
+    similarity-threshold: 0.55

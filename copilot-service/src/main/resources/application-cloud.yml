@@ -1,0 +1,57 @@
+# Hosted chat generation, local embeddings.
+#
+#   SENTINEL_HF_TOKEN=hf_xxx mvn -pl copilot-service spring-boot:run -Dspring-boot.run.profiles=cloud
+#
+# ---------------------------------------------------------------------------------------
+# WARNING - this profile sends retrieved policy excerpts to a third party.
+#
+# Demo and development only, against the synthetic corpus in docs/sample-policies. Do not
+# point it at real internal policy, and do not use it once the agent's tools start returning
+# customer data (week 5 onwards).
+#
+# The corpus itself never leaves the machine, because embeddings run locally - but the two or
+# three excerpts that retrieval selects DO, along with the question, which leaks investigative
+# context on its own. In a bank that is a GDPR transfer and ICT third-party risk under DORA,
+# not a style preference. The production shapes are self-hosted inference in the bank's own
+# tenancy, or a contracted provider with a DPA, zero retention and in-region processing.
+#
+# The control that makes remote inference defensible here is routing on `classification`:
+# CONFIDENTIAL chunks force local inference, PUBLIC/INTERNAL may go remote. Not built yet -
+# see docs/design-decisions.md.
+# ---------------------------------------------------------------------------------------
+#
+# Why this split rather than "everything remote":
+#
+#  * Hugging Face's router exposes /v1/chat/completions but not /v1/embeddings, so embeddings
+#    have to run somewhere else regardless.
+#  * It is also the better architecture for this domain. Embeddings are computed over the
+#    ENTIRE policy corpus; chat sees only the handful of excerpts that retrieval selected.
+#    Keeping embedding local means the full corpus never leaves the machine, and the remote
+#    model sees the minimum needed to answer. For a bank that distinction is the difference
+#    between a design review passing and failing.
+#  * The embedding model is 274 MB. The chat model is 4.7 GB. This moves the expensive half
+#    off the laptop and leaves the cheap half where it costs nothing.
+#
+# Any OpenAI-compatible endpoint works here - swap base-url for Together, Groq, OpenAI itself
+# or a self-hosted vLLM. Nothing in the application code knows the difference.
+
+spring:
+  ai:
+    model:
+      chat: openai
+      embedding: ollama
+
+    openai:
+      base-url: ${SENTINEL_CHAT_BASE_URL:https://router.huggingface.co}
+      api-key: ${SENTINEL_HF_TOKEN}
+      chat:
+        options:
+          model: ${SENTINEL_CHAT_MODEL:meta-llama/Llama-3.1-8B-Instruct}
+          temperature: 0.1
+
+    # Embeddings stay local. The corpus is not sent anywhere.
+    ollama:
+      base-url: ${SENTINEL_LLM_BASE_URL:http://localhost:11434}
+      embedding:
+        options:
+          model: ${SENTINEL_LLM_EMBEDDING_MODEL:nomic-embed-text}

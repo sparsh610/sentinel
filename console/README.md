@@ -1,33 +1,59 @@
-# console — Angular analyst UI
+# Console
 
-Not generated yet. This is the first thing to do in week 1, after the copilot service answers
-its first question.
+This project was generated using [Angular CLI](https://github.com/angular/angular-cli) version 22.1.8.
+
+## Development server
+
+To start a local development server, run:
 
 ```bash
-# from the repo root
-npx @angular/cli@latest new console --directory console --routing --style=scss --ssr=false
+ng serve
 ```
 
-> The Angular CLI installed on this machine is 17.3.13 and Node is 24. Angular 17 was built
-> against Node 18/20, so either bump the CLI (`npx @angular/cli@latest`, as above) or pin Node
-> to 20 for this folder. Generating with the latest CLI is the simpler path and the resume says
-> "Angular 17+" either way.
+Once the server is running, open your browser and navigate to `http://localhost:4200/`. The application will automatically reload whenever you modify any of the source files.
 
-## Screens
+## Code scaffolding
 
-| Screen | Week | What it shows |
-|---|---|---|
-| Copilot chat | 1–2 | Streaming answers over the policy corpus, each with citations that open the source paragraph |
-| Alert queue | 3 | Open alerts, which signal fired (supervised / anomaly / segment), sortable by score |
-| Case view | 5–6 | Evidence, the agent's draft note, the execution trace, approve / reject |
-| Evaluation | 8 | Retrieval accuracy over the 30 golden questions; PR-AUC and the threshold curve |
+Angular CLI includes powerful code scaffolding tools. To generate a new component, run:
 
-## Conventions
+```bash
+ng generate component component-name
+```
 
-- Standalone components, signals, and the `inject()` function — not the older NgModule style.
-  Worth doing deliberately: it is what current Angular job ads describe, and it is a visible
-  difference from an Angular 8 codebase.
-- Streaming responses arrive over SSE from `copilot-service`; keep the transport in a service,
-  not in a component.
-- Proxy `/api` to `localhost:8081` in development via `proxy.conf.json` rather than
-  hard-coding hosts.
+For a complete list of available schematics (such as `components`, `directives`, or `pipes`), run:
+
+```bash
+ng generate --help
+```
+
+## Building
+
+To build the project run:
+
+```bash
+ng build
+```
+
+This will compile your project and store the build artifacts in the `dist/` directory. By default, the production build optimizes your application for performance and speed.
+
+## Running unit tests
+
+To execute unit tests with the [Vitest](https://vitest.dev/) test runner, use the following command:
+
+```bash
+ng test
+```
+
+## Running end-to-end tests
+
+For end-to-end (e2e) testing, run:
+
+```bash
+ng e2e
+```
+
+Angular CLI does not come with an end-to-end testing framework by default. You can choose one that suits your needs.
+
+## Additional Resources
+
+For more information on using the Angular CLI, including detailed command references, visit the [Angular CLI Overview and Command Reference](https://angular.dev/tools/cli) page.

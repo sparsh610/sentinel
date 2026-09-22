@@ -1,14 +1,79 @@
 spring:
   application:
     name: copilot-service
+
   datasource:
-    url: ${{SENTINEL_DB_URL:jdbc:postgresql://localhost:5432/sentinel}}
-    username: ${{SENTINEL_DB_USER:sentinel}}
-    password: ${{SENTINEL_DB_PASSWORD:sentinel}}
+    url: ${SENTINEL_DB_URL:jdbc:postgresql://localhost:5432/sentinel}
+    username: ${SENTINEL_DB_USER:sentinel}
+    password: ${SENTINEL_DB_PASSWORD:sentinel}
+
   jpa:
     hibernate:
       ddl-auto: validate
     open-in-view: false
+    properties:
+      hibernate:
+        default_schema: knowledge
+
+  flyway:
+    enabled: true
+    schemas: knowledge
+    default-schema: knowledge
+
+  servlet:
+    multipart:
+      max-file-size: 25MB
+      max-request-size: 25MB
+
+  ai:
+    # Default: everything local, no API key, no data leaving the machine.
+    # Activate the "cloud" profile to move chat generation to a hosted model.
+    model:
+      chat: ollama
+      embedding: ollama
+      # The OpenAI starter autoconfigures speech, transcription, image and moderation models
+      # too, and each one demands an API key at startup even when chat is pointed elsewhere.
+      # This app uses none of them.
+      audio:
+        speech: none
+        transcription: none
+      image: none
+      moderation: none
+
+    ollama:
+      base-url: ${SENTINEL_LLM_BASE_URL:http://localhost:11434}
+      chat:
+        options:
+          model: ${SENTINEL_LLM_CHAT_MODEL:llama3.1:8b}
+          # Low temperature on purpose: a compliance answer should be reproducible, and
+          # creative phrasing is a liability when the answer cites a regulation.
+          temperature: 0.1
+      embedding:
+        options:
+          model: ${SENTINEL_LLM_EMBEDDING_MODEL:nomic-embed-text}
+
+    vectorstore:
+      pgvector:
+        initialize-schema: true
+        schema-name: knowledge
+        table-name: document_chunk
+        # nomic-embed-text emits 768 dimensions. Changing the embedding model means
+        # re-embedding every document - the stored vectors are not comparable across models.
+        dimensions: 768
+        index-type: HNSW
+        distance-type: COSINE_DISTANCE
+
+sentinel:
+  copilot:
+    # Sized for the clause structure of policy documents rather than for prose. At 500 tokens a
+    # short policy collapses into two chunks, and a "citation" then points at half the file
+    # instead of the clause a human would point at.
+    chunk-size-tokens: 220
+    min-chunk-size-chars: 150
+    top-k: 6
+    # Below this cosine similarity a chunk is noise. Answering from noise is how a RAG system
+    # produces a confident citation to an irrelevant paragraph.
+    similarity-threshold: 0.55
 
 server:
   port: 8081
@@ -18,3 +83,7 @@ management:
     web:
       exposure:
         include: health,info
+
+logging:
+  level:
+    com.sparsh.sentinel: DEBUG

@@ -30,7 +30,8 @@
              target job ads ask for, and it keeps the build portable. -->
         <maven.compiler.release>21</maven.compiler.release>
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
-        <spring-ai.version>1.0.0</spring-ai.version>
+        <!-- 1.1.x is the line that pairs with Spring Boot 3.5. Spring AI 2.x requires Boot 4. -->
+        <spring-ai.version>1.1.8</spring-ai.version>
         <testcontainers.version>1.20.4</testcontainers.version>
     </properties>
 
