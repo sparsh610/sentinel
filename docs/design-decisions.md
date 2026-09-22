@@ -140,7 +140,26 @@ stays in the console, behind a human (see §5).
 in the tools themselves rather than at the controller. That is the correct place for it anyway,
 but it is a real constraint to hold on to as tools are added.
 
-## 9. Why Java 21 when JDK 25 is installed
+## 9. Why both GitHub Actions and a Jenkinsfile
+
+**Actions is the CI that runs.** The repository is public, so CI has to execute on every push
+with no infrastructure to maintain and report a badge anyone can see. Nothing about a
+self-hosted controller does that better.
+
+**The Jenkinsfile is there because the deployment target is an enterprise.** Banks and insurers
+run Jenkins, and a pipeline that only exists as a vendor-specific YAML says nothing about
+whether the build is portable. Expressing the same build declaratively on Jenkins is the check
+that it is: same `mvn clean verify`, same JUnit publishing, same artifacts.
+
+`MAVEN_OPTS` pins the local repository into the workspace, because a shared Jenkins agent
+running concurrent builds against one `~/.m2` is a genuine and very annoying source of
+corrupted-artifact failures.
+
+**Honesty rule attached to this file:** it does not go on the resume as pipeline experience
+until it has actually executed at least once (Jenkins in Docker, one green run). An untested
+Jenkinsfile is a claim, not a skill.
+
+## 10. Why Java 21 when JDK 25 is installed
 
 The build targets 21 (`maven.compiler.release`). It is the LTS that current enterprise job
 descriptions ask for, and targeting it keeps the project buildable on any JDK from 21 upward

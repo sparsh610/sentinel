@@ -12,7 +12,7 @@ its own — nothing waits for the end.
 | 5–6 | **Agent.** Planner + tools, step limits, execution trace, analyst approve/reject flow | ⬜ |
 | 6 | **MCP.** Publish the same tools as an MCP server from `copilot-service`; demo an external MCP client investigating a live alert. Thin adapter over existing tools — if the tools are not finished, this is not started | ⬜ |
 | 7 | **Controls.** Keycloak roles, document ACLs enforced at retrieval, PII masking, audit log — enforced **in the tools**, so they cover the MCP entry point too | ⬜ |
-| 8 | **Evidence.** Evaluation page — 30 golden Q&As for retrieval, PR-AUC and threshold curve for the models. Testcontainers tests, green CI badge | ⬜ |
+| 8 | **Evidence.** Evaluation page — 30 golden Q&As for retrieval, PR-AUC and threshold curve for the models. Testcontainers tests, green CI badge. Run the `Jenkinsfile` once against Jenkins in Docker so it is verified, not just written | ⬜ |
 | 9–10 | **Ship.** Cloud Run deploy, live demo link, write-up | ⬜ |
 
 ## Definition of done for v1.0 (week 4)

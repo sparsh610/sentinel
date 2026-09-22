@@ -81,7 +81,7 @@ Full detail in [`docs/architecture.md`](docs/architecture.md).
 | Tool protocol | MCP (Model Context Protocol) — the investigation tools are published as an MCP server |
 | Frontend | Angular 17+, TypeScript |
 | Auth | Keycloak (OIDC), role-based access control |
-| Ops | Docker Compose, GitHub Actions, Testcontainers, GCP Cloud Run |
+| Ops | Docker Compose, GitHub Actions (primary CI) + Jenkins (`Jenkinsfile`), Testcontainers, GCP Cloud Run |
 
 ## Running it
 
