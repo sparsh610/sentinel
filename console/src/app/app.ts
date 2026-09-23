@@ -1,9 +1,8 @@
 import { Component } from '@angular/core';
-
-import { Chat } from './copilot/chat';
+import { RouterLink, RouterLinkActive, RouterOutlet } from '@angular/router';
 
 @Component({
-  imports: [Chat],
+  imports: [RouterOutlet, RouterLink, RouterLinkActive],
   selector: 'app-root',
   styleUrl: './app.scss',
   templateUrl: './app.html',

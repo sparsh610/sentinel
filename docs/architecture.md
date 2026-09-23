@@ -24,9 +24,21 @@
 Owns the transaction and customer tables. Bursty and I/O-bound. Deliberately dumb — it does no
 scoring, so that the scoring model can change without touching ingest.
 
+A transaction and its event are written in one database transaction, to `transaction` and
+`outbox_event`; a relay publishes the outbox to Kafka, keyed by customer id
+([design decision §12](design-decisions.md#12-why-an-outbox-rather-than-publishing-to-kafka-directly)).
+A repeated `externalRef` is a no-op, so senders can retry safely.
+
 ### `scoring-service` (:8083)
 Loads the `.onnx` files produced by `ml/` at start-up and holds them in memory. CPU-bound,
 steady throughput. Owns the alert table and the scoring threshold.
+
+Every source of suspicion is a `Detector`. Today those are three rules — large cash,
+structuring, high-risk jurisdiction — and the models join them in week 4
+([§13](design-decisions.md#13-why-rules-ship-before-the-models-and-stay-after)). A transaction
+yields at most one alert, carrying every finding against it. The `scored_transaction` ledger
+makes redelivery a no-op and is the history the structuring rule looks back over. A record
+that cannot be parsed goes to `transactions-dlt` instead of blocking its partition.
 
 The **feature contract** between training and serving lives here: the feature order in
 `ml/models/<model>.features.json` must match what the Java feature builder produces. A test
@@ -55,11 +67,15 @@ Two schemas in one Postgres instance:
 
 | Schema | Tables |
 |---|---|
-| `sentinel` | `customer`, `transaction`, `alert`, `case`, `case_note`, `audit_event` |
+| `sentinel` | `customer`, `transaction`, `outbox_event` (tx-ingest) · `scored_transaction`, `alert`, `alert_finding` (scoring-service) · `case`, `case_note`, `audit_event` (weeks 5–7) |
 | `knowledge` | `document`, `document_chunk` (with the `vector` column), `document_acl` |
 
 They are separate so that re-indexing the policy corpus can never touch operational or audit
 data.
+
+Within `sentinel`, each service migrates only its own tables and keeps its own Flyway history
+table (`flyway_history_tx_ingest`, `flyway_history_scoring`). Neither service reads the other's
+tables: scoring learns everything from the event.
 
 ## Security model
 

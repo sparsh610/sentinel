@@ -88,8 +88,8 @@ Full detail in [`docs/architecture.md`](docs/architecture.md).
 **Prerequisites:** JDK 21+, Maven 3.9+, Docker, Node 20+.
 
 ```bash
-# 1. Infrastructure (Postgres + pgvector)
-docker compose up -d
+# 1. Infrastructure: Postgres + pgvector, and Kafka for the transaction stream
+docker compose --profile stream up -d
 
 # 2. Local LLM, optional but needed for the copilot
 docker compose --profile llm up -d
@@ -99,7 +99,9 @@ docker exec sentinel-ollama ollama pull llama3.1:8b
 # 3. Build and test everything
 mvn clean test
 
-# 4. Run a service
+# 4. Run the services (one terminal each)
+mvn -pl tx-ingest spring-boot:run
+mvn -pl scoring-service spring-boot:run
 mvn -pl copilot-service spring-boot:run
 
 # 5. Console
@@ -113,7 +115,38 @@ cd console && npm install && npm start
 | scoring-service | http://localhost:8083/actuator/health |
 | console | http://localhost:4200 |
 
-Add `--profile stream` for Kafka (week 3) and `--profile auth` for Keycloak (week 7).
+Add `--profile llm` for the local model and `--profile auth` for Keycloak (week 7).
+
+## The alert pipeline
+
+`tx-ingest` accepts transactions, `scoring-service` scores them off Kafka, and the **Alerts** screen
+in the console shows the queue. The quickest way to see it work is the simulator, which sends a
+batch of ordinary synthetic traffic with three known typologies planted in it:
+
+```bash
+curl -X POST "http://localhost:8082/api/simulations?ordinary=40"
+curl http://localhost:8083/api/alerts
+```
+
+Or press **Simulate traffic** in the console. A single transaction:
+
+```bash
+curl -X POST http://localhost:8082/api/transactions      -H "Content-Type: application/json"      -d '{"externalRef":"BANK-0001","customerId":"C-10002","direction":"CREDIT","channel":"CASH",
+          "amount":15000,"currency":"EUR","bookedAt":"2026-09-23T10:00:00Z"}'
+```
+
+| Endpoint | Purpose |
+|---|---|
+| `POST :8082/api/transactions` | Accept one transaction. `201` when new, `200` when that `externalRef` was seen before — so a sender can retry safely |
+| `GET :8082/api/customers/{id}/transactions` | A customer's recent transactions |
+| `POST :8082/api/simulations` | Demo traffic with planted typologies |
+| `GET :8083/api/alerts` | The open queue, most serious first, each alert with the findings that raised it |
+
+Detection this week is three rules: cash at or above EUR 10,000, **structuring** (three or more
+cash deposits just under that within 24 hours), and any payment involving a FATF high-risk
+jurisdiction. The ML models join them in week 4 behind the same interface —
+[`docs/design-decisions.md`](docs/design-decisions.md) §13 explains why the rules stay. The
+customers in `db/demo` are synthetic.
 
 ## The copilot API
 
@@ -212,14 +245,15 @@ will echo the question back or append a stray refusal. Use a larger model
 The reasoning behind the shape of this system is in
 [`docs/design-decisions.md`](docs/design-decisions.md) — why Kafka rather than a REST call, why
 the models are exported to ONNX rather than served from a Python process, why there is both a
-supervised and an unsupervised model, and why the agent cannot close a case on its own.
+supervised and an unsupervised model, why ingest publishes through an outbox, and why the agent
+cannot close a case on its own.
 
 ## Repository layout
 
 ```
 copilot-service/   RAG over policy documents + the investigation agent
-tx-ingest/         accepts and replays transactions, publishes to Kafka
-scoring-service/   loads the ONNX models, scores transactions, raises alerts
+tx-ingest/         accepts transactions, publishes them to Kafka through an outbox
+scoring-service/   scores the stream (rules now, ONNX models from week 4), raises alerts
 console/           Angular analyst UI
 ml/                Python notebooks that train the models and export ONNX
 db/init/           Postgres bootstrap (pgvector extension, schemas)

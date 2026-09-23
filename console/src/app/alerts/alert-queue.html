@@ -1,0 +1,95 @@
+<section class="queue">
+  <header class="toolbar">
+    <h2>
+      Open alerts
+      @if (loaded()) {
+        <span class="count">{{ alerts().length }}</span>
+      }
+    </h2>
+
+    <button type="button" (click)="simulate()" [disabled]="simulating()">
+      {{ simulating() ? 'Simulating…' : 'Simulate traffic' }}
+    </button>
+  </header>
+
+  @if (lastSimulation(); as report) {
+    <p class="notice">
+      Sent {{ report.submitted }} transactions through ingest. Planted:
+      @for (item of report.planted; track item; let last = $last) {
+        {{ item }}{{ last ? '.' : ';' }}
+      }
+    </p>
+  }
+
+  @if (error(); as message) {
+    <p class="error" role="alert">{{ message }}</p>
+  }
+
+  <table>
+    <thead>
+      <tr>
+        <th class="num">Score</th>
+        <th>Why</th>
+        <th>Customer</th>
+        <th class="num">Amount</th>
+        <th>Channel</th>
+        <th>Counterparty</th>
+        <th>Booked</th>
+      </tr>
+    </thead>
+    <tbody>
+      @for (alert of alerts(); track alert.id) {
+        <tr class="row" [class.open]="expanded() === alert.id" (click)="toggle(alert)"
+            tabindex="0" (keydown.enter)="toggle(alert)" [attr.aria-expanded]="expanded() === alert.id">
+          <td class="num">
+            <span class="score" [class.high]="alert.score >= 0.8">{{ alert.score | number: '1.2-2' }}</span>
+          </td>
+          <td>
+            @for (finding of alert.findings; track finding.rule) {
+              <span class="rule" [attr.data-rule]="finding.rule">{{ label(finding.rule) }}</span>
+            }
+          </td>
+          <td>
+            {{ alert.customerId }}
+            <span class="sub">{{ alert.customerSegment | lowercase }}</span>
+          </td>
+          <td class="num">{{ alert.amount | currency: alert.currency }}</td>
+          <td>{{ alert.channel | lowercase }} <span class="sub">{{ alert.direction | lowercase }}</span></td>
+          <td>
+            {{ alert.counterpartyName ?? '—' }}
+            @if (alert.counterpartyCountry) {
+              <span class="sub">{{ alert.counterpartyCountry }}</span>
+            }
+          </td>
+          <td>{{ alert.bookedAt | date: 'dd MMM, HH:mm' }}</td>
+        </tr>
+
+        @if (expanded() === alert.id) {
+          <tr class="detail">
+            <td colspan="7">
+              <ul>
+                @for (finding of alert.findings; track finding.rule) {
+                  <li><strong>{{ label(finding.rule) }}</strong> — {{ finding.reason }}</li>
+                }
+              </ul>
+              <p class="meta">
+                Raised {{ alert.raisedAt | date: 'dd MMM yyyy, HH:mm:ss' }} ·
+                transaction <code>{{ alert.transactionId }}</code>
+              </p>
+            </td>
+          </tr>
+        }
+      } @empty {
+        <tr>
+          <td colspan="7" class="empty">
+            @if (loaded()) {
+              No open alerts. Use <em>Simulate traffic</em> to push a batch through ingest and scoring.
+            } @else if (!error()) {
+              Loading…
+            }
+          </td>
+        </tr>
+      }
+    </tbody>
+  </table>
+</section>

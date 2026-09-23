@@ -193,3 +193,62 @@ Jenkinsfile is a claim, not a skill.
 The build targets 21 (`maven.compiler.release`). It is the LTS that current enterprise job
 descriptions ask for, and targeting it keeps the project buildable on any JDK from 21 upward
 rather than only on the newest one.
+
+## 12. Why an outbox rather than publishing to Kafka directly
+
+**Rejected:** `tx-ingest` saves the transaction and then calls `kafkaTemplate.send()` in the same
+request.
+
+That is two writes to two systems with no transaction spanning them. If the process dies after
+the database commit and before the send, the transaction is stored and never scored — in
+transaction monitoring, a silent gap. Sending first and committing second fails the other way:
+an alert for a transaction that was rolled back.
+
+So `tx-ingest` writes the transaction and an `outbox_event` row in **one database
+transaction**, and a relay publishes unpublished rows afterwards. The relay claims rows with
+`FOR UPDATE SKIP LOCKED`, so a second instance cannot publish the same row, and stops at the
+first failed send so that a later event for a customer never overtakes an earlier one.
+
+**The price is at-least-once delivery.** If the relay dies after the broker acknowledged a send
+but before the row is marked, the event goes out again. `scoring-service` is therefore
+idempotent: it records each `transactionId` in `scored_transaction` with
+`ON CONFLICT DO NOTHING` before running any detector, and a redelivered event stops there.
+Exactly-once across a database and Kafka is not on offer; at-least-once plus an idempotent
+consumer is the standard answer.
+
+Three smaller decisions travel with it:
+
+- **Keyed by customer id.** Kafka orders only within a partition, and the structuring rule
+  needs one customer's deposits in order.
+- **No shared event class.** Each service declares its own `TransactionEvent` record, and the
+  JSON is the contract. A shared jar would make the two services release together — the
+  coupling the broker exists to remove. The consumer ignores unknown fields and dead-letters an
+  unknown `schemaVersion`.
+- **Topics are declared, never auto-created.** During the build, the dead-letter recoverer's
+  default topic turned out to be `transactions-dlt`, not the `transactions.DLT` that had been
+  declared, and the broker quietly created a second topic that nobody was watching. The destination is now configured
+  explicitly and broker auto-creation is off, so a wrong name fails loudly.
+
+## 13. Why rules ship before the models, and stay after
+
+Week 3 detects with three rules — cash at or above EUR 10,000, structuring just under it, and
+payments involving a FATF high-risk jurisdiction. They are not a placeholder for the models.
+
+- **Regulators ask for specific typologies by name.** A bank has to show that it monitors for
+  structuring. "The Isolation Forest would probably have caught it" is not an answer an
+  examiner accepts.
+- **Rules are explainable line by line.** Each finding carries a sentence naming the facts that
+  fired it, which is what an analyst reads first.
+- **Models cover what nobody wrote a rule for** (§3). The two are complementary. Every source of
+  suspicion implements one `Detector` interface, so the models arrive in week 4 as more
+  detectors and the rules stay.
+
+The rule scores (0.60 / 0.75 / 0.85) are fixed weights, not probabilities. They exist so the
+queue sorts on one column once the models add calibrated scores next to them, and they are
+stated honestly as such.
+
+**Known limit:** the structuring rule looks back from each deposit's booking time. A deposit
+that arrives out of order — booked earlier than one already scored — still counts towards
+later deposits but does not trigger on its own arrival. Late-arriving data is normal in
+payments; handling it properly needs event-time windows, which is more machinery than this
+stage justifies.

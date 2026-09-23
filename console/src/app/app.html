@@ -1,8 +1,15 @@
 <header class="masthead">
-  <h1>Sentinel</h1>
-  <p>Compliance copilot &mdash; answers are grounded in the ingested policy corpus.</p>
+  <div>
+    <h1>Sentinel</h1>
+    <p>Transaction monitoring and compliance investigation.</p>
+  </div>
+
+  <nav>
+    <a routerLink="/alerts" routerLinkActive="active">Alerts</a>
+    <a routerLink="/copilot" routerLinkActive="active">Copilot</a>
+  </nav>
 </header>
 
 <main>
-  <sentinel-chat />
+  <router-outlet />
 </main>

@@ -1,4 +1,24 @@
 {
+  "/api/alerts": {
+    "target": "http://localhost:8083",
+    "secure": false,
+    "changeOrigin": true
+  },
+  "/api/simulations": {
+    "target": "http://localhost:8082",
+    "secure": false,
+    "changeOrigin": true
+  },
+  "/api/transactions": {
+    "target": "http://localhost:8082",
+    "secure": false,
+    "changeOrigin": true
+  },
+  "/api/customers": {
+    "target": "http://localhost:8082",
+    "secure": false,
+    "changeOrigin": true
+  },
   "/api": {
     "target": "http://localhost:8081",
     "secure": false,

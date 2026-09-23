@@ -1,0 +1,145 @@
+:host {
+  --ink: #1b1f24;
+  --muted: #5b6673;
+  --line: #dfe3e8;
+  --accent: #1f5fa9;
+  --hover: #f4f7fb;
+  --error: #a32020;
+  --high: #a32020;
+
+  display: block;
+  height: 100%;
+  overflow-y: auto;
+  color: var(--ink);
+}
+
+.toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 0.75rem;
+
+  h2 {
+    margin: 0;
+    font-size: 1rem;
+  }
+
+  .count {
+    margin-left: 0.4rem;
+    padding: 0 0.45rem;
+    border-radius: 0.6rem;
+    background: var(--accent);
+    color: #fff;
+    font-size: 0.75rem;
+  }
+
+  button {
+    font: inherit;
+    padding: 0.4rem 0.9rem;
+    border: 1px solid var(--accent);
+    border-radius: 0.3rem;
+    background: var(--accent);
+    color: #fff;
+    cursor: pointer;
+
+    &:disabled {
+      opacity: 0.6;
+      cursor: default;
+    }
+  }
+}
+
+.notice,
+.error {
+  margin: 0 0 0.75rem;
+  font-size: 0.85rem;
+  line-height: 1.5;
+}
+
+.notice {
+  color: var(--muted);
+}
+
+.error {
+  color: var(--error);
+}
+
+table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.85rem;
+}
+
+th {
+  text-align: left;
+  font-weight: 600;
+  color: var(--muted);
+  border-bottom: 1px solid var(--line);
+  padding: 0.4rem 0.5rem;
+}
+
+td {
+  padding: 0.5rem;
+  border-bottom: 1px solid var(--line);
+  vertical-align: top;
+}
+
+.num {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
+.row {
+  cursor: pointer;
+
+  &:hover,
+  &.open {
+    background: var(--hover);
+  }
+}
+
+.score {
+  font-weight: 600;
+
+  &.high {
+    color: var(--high);
+  }
+}
+
+.rule {
+  display: inline-block;
+  margin: 0 0.25rem 0.15rem 0;
+  padding: 0.05rem 0.45rem;
+  border-radius: 0.6rem;
+  border: 1px solid var(--line);
+  font-size: 0.75rem;
+  white-space: nowrap;
+}
+
+.sub {
+  display: block;
+  color: var(--muted);
+  font-size: 0.75rem;
+}
+
+.detail td {
+  background: var(--hover);
+
+  ul {
+    margin: 0 0 0.4rem;
+    padding-left: 1.1rem;
+    line-height: 1.6;
+  }
+
+  .meta {
+    margin: 0;
+    color: var(--muted);
+    font-size: 0.75rem;
+  }
+}
+
+.empty {
+  color: var(--muted);
+  text-align: center;
+  padding: 2rem 0.5rem;
+}
