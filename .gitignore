@@ -33,6 +33,12 @@ ml/models/*.joblib
 .classpath
 .project
 
+# Interview preparation material. Kept local on purpose: the engineering rationale
+# belongs in docs/design-decisions.md, where a reviewer will actually read it, and
+# "here is how to answer questions about this project" does not belong in the repo
+# the questions are about.
+docs/*.docx
+
 # Local config and secrets - never commit
 .env
 *.local.yml

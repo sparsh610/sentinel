@@ -51,7 +51,7 @@ spring:
 
     # Embeddings stay local. The corpus is not sent anywhere.
     ollama:
-      base-url: ${SENTINEL_LLM_BASE_URL:http://localhost:11434}
+      base-url: ${SENTINEL_LLM_BASE_URL:http://localhost:11435}
       embedding:
         options:
           model: ${SENTINEL_LLM_EMBEDDING_MODEL:nomic-embed-text}

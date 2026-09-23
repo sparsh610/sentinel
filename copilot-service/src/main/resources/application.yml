@@ -41,7 +41,7 @@ spring:
       moderation: none
 
     ollama:
-      base-url: ${SENTINEL_LLM_BASE_URL:http://localhost:11434}
+      base-url: ${SENTINEL_LLM_BASE_URL:http://localhost:11435}
       chat:
         options:
           model: ${SENTINEL_LLM_CHAT_MODEL:llama3.1:8b}

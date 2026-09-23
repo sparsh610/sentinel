@@ -50,7 +50,12 @@ services:
     container_name: sentinel-ollama
     profiles: ["llm"]
     ports:
-      - "11434:11434"
+      # Published on 11435, not 11434, on purpose. A natively installed Ollama binds
+      # 127.0.0.1:11434 and the container gets the IPv6 wildcard, so `localhost` reaches a
+      # different server depending on which client resolves it first - curl finds the
+      # container, the JVM finds the native install and 404s on models it does not have.
+      # A distinct port removes the ambiguity instead of documenting it.
+      - "11435:11434"
     volumes:
       - sentinel-ollama:/root/.ollama
     # After first start, pull the models:

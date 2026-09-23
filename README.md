@@ -174,20 +174,29 @@ anywhere.
 ## Troubleshooting
 
 **`model '<name>' not found`, but `ollama list` shows it.**
-You probably have Ollama installed natively *and* running in Docker. They both want port
-11434, and they bind different addresses — the native one takes `127.0.0.1`, the container
-gets the IPv6 wildcard. `curl localhost` may reach the container while the JVM resolves
-`localhost` to `127.0.0.1` and reaches the native install, which has none of the models. Same
-URL, different server.
+You have Ollama installed natively *and* running in Docker, and something is still pointing at
+port 11434. Both installs want that port and they bind different addresses — the native one
+takes `127.0.0.1`, the container gets the IPv6 wildcard. `curl localhost` reaches the
+container while the JVM resolves `localhost` to `127.0.0.1` and reaches the native install,
+which has none of these models. Same URL, different server, and nothing in the error says so.
+
+The Compose file therefore publishes the container on **11435**, and `SENTINEL_LLM_BASE_URL`
+defaults to `http://localhost:11435`. If you see this error, something is overriding that back
+to 11434 — check your `.env` and your shell environment.
 
 ```bash
-# Who actually owns the port (Windows)
-Get-NetTCPConnection -LocalPort 11434 -State Listen |
-  ForEach-Object { (Get-Process -Id $_.OwningProcess).ProcessName }
+# Who actually owns each port (Windows)
+Get-NetTCPConnection -LocalPort 11434,11435 -State Listen |
+  ForEach-Object { "$($_.LocalAddress):$($_.LocalPort) -> $((Get-Process -Id $_.OwningProcess).ProcessName)" }
+
+# Which server is really answering, and what it has
+curl -s http://localhost:11435/api/version   # the container
+curl -s http://127.0.0.1:11434/api/version   # a native install, if you have one
 ```
 
-Pick one. Either quit the native Ollama, or drop the `llm` profile and point the service at
-the native install by pulling the models there instead.
+A native Ollama can update itself in the background and reclaim 11434 mid-session, so this can
+appear without you changing anything. If you would rather run only the native install, drop the
+`llm` profile, pull the models there, and set `SENTINEL_LLM_BASE_URL=http://localhost:11434`.
 
 **Ingestion succeeds but answers are empty or refuse everything.**
 Check the similarity threshold in `sentinel.copilot.similarity-threshold`. Too high and every
