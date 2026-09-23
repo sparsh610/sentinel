@@ -1,14 +1,61 @@
 spring:
   application:
     name: tx-ingest
+
   datasource:
     url: ${SENTINEL_DB_URL:jdbc:postgresql://localhost:5432/sentinel}
     username: ${SENTINEL_DB_USER:sentinel}
     password: ${SENTINEL_DB_PASSWORD:sentinel}
+
   jpa:
     hibernate:
       ddl-auto: validate
     open-in-view: false
+    properties:
+      hibernate:
+        default_schema: sentinel
+
+  flyway:
+    enabled: true
+    schemas: sentinel
+    default-schema: sentinel
+    # Two services migrate the sentinel schema, each owning its own tables, so each keeps its
+    # own history table. Sharing one would make each service's migrations look like unknown
+    # versions to the other.
+    table: flyway_history_tx_ingest
+    # Whichever service starts second finds a non-empty schema with no history table of its
+    # own, which Flyway refuses by default. Baselining at 0 accepts that and still runs V1.
+    baseline-on-migrate: true
+    baseline-version: 0
+    # db/demo seeds the synthetic customers. Drop it from the list to start with an empty
+    # customer table.
+    locations: classpath:db/migration,classpath:db/demo
+
+  kafka:
+    bootstrap-servers: ${SENTINEL_KAFKA_BOOTSTRAP:localhost:9092}
+    producer:
+      # Keys are customer ids, values are the JSON the outbox already holds.
+      key-serializer: org.apache.kafka.common.serialization.StringSerializer
+      value-serializer: org.apache.kafka.common.serialization.StringSerializer
+      # The client defaults already, stated here because the outbox depends on them: a send
+      # only counts once every in-sync replica has it, and a retried send cannot duplicate.
+      acks: all
+      properties:
+        enable.idempotence: true
+        # With the broker down, a send otherwise blocks for 60 s waiting for metadata while the
+        # relay holds its row locks. Fail fast; the next poll retries.
+        max.block.ms: 5000
+
+sentinel:
+  ingest:
+    topic: transactions
+    # Partitions bound how many scoring consumers can work in parallel. Ordering is only
+    # guaranteed within a partition, which is why the message key is the customer id.
+    topic-partitions: 3
+    outbox:
+      relay-enabled: true
+      poll-interval-ms: 500
+      batch-size: 100
 
 server:
   port: 8082
@@ -18,3 +65,7 @@ management:
     web:
       exposure:
         include: health,info
+
+logging:
+  level:
+    com.sparsh.sentinel: DEBUG

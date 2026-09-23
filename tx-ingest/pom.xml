@@ -12,7 +12,7 @@
 
     <artifactId>tx-ingest</artifactId>
     <name>Sentinel :: Transaction Ingest</name>
-    <description>Accepts and replays transactions, publishes them to Kafka</description>
+    <description>Accepts transactions, stores them, and publishes them to Kafka through an outbox</description>
 
     <dependencies>
         <dependency>
@@ -25,12 +25,25 @@
             <scope>runtime</scope>
         </dependency>
 
-        <!-- Week 3: uncomment for the transaction stream.
+        <!-- Schema is owned by migrations, not by Hibernate: ddl-auto stays at validate. -->
+        <dependency>
+            <groupId>org.flywaydb</groupId>
+            <artifactId>flyway-core</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>org.flywaydb</groupId>
+            <artifactId>flyway-database-postgresql</artifactId>
+        </dependency>
+
         <dependency>
             <groupId>org.springframework.kafka</groupId>
             <artifactId>spring-kafka</artifactId>
         </dependency>
-        -->
+
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-validation</artifactId>
+        </dependency>
     </dependencies>
 
     <build>
