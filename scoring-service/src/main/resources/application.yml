@@ -1,14 +1,65 @@
 spring:
   application:
     name: scoring-service
+
   datasource:
     url: ${SENTINEL_DB_URL:jdbc:postgresql://localhost:5432/sentinel}
     username: ${SENTINEL_DB_USER:sentinel}
     password: ${SENTINEL_DB_PASSWORD:sentinel}
+
   jpa:
     hibernate:
       ddl-auto: validate
     open-in-view: false
+    properties:
+      hibernate:
+        default_schema: sentinel
+        # The alert queue loads each alert's findings lazily. Batching turns one query per
+        # alert into one query per 50.
+        default_batch_fetch_size: 50
+
+  flyway:
+    enabled: true
+    schemas: sentinel
+    default-schema: sentinel
+    # Own history table - tx-ingest migrates the same schema. See tx-ingest application.yml.
+    table: flyway_history_scoring
+    baseline-on-migrate: true
+    baseline-version: 0
+
+  kafka:
+    bootstrap-servers: ${SENTINEL_KAFKA_BOOTSTRAP:localhost:9092}
+    consumer:
+      group-id: scoring-service
+      # A new consumer group starts from the beginning of the topic, not from "now": a
+      # transaction published before scoring first started still has to be scored.
+      auto-offset-reset: earliest
+      key-deserializer: org.apache.kafka.common.serialization.StringDeserializer
+      value-deserializer: org.apache.kafka.common.serialization.StringDeserializer
+    producer:
+      # Only used to write failed records to the dead-letter topic.
+      key-serializer: org.apache.kafka.common.serialization.StringSerializer
+      value-serializer: org.apache.kafka.common.serialization.StringSerializer
+    listener:
+      # One consumer thread per partition. More would sit idle.
+      concurrency: 3
+
+sentinel:
+  scoring:
+    topic: transactions
+    dead-letter-topic: transactions-dlt
+    topic-partitions: 3
+    # The EUR 10,000 cash threshold that EU anti-money-laundering rules are built around.
+    # Illustrative: a bank's real thresholds come from its own risk assessment.
+    cash-threshold: 10000
+    structuring:
+      # Deposits in [band-floor, cash-threshold) count towards a structuring pattern.
+      band-floor: 9000
+      min-count: 3
+      window: 24h
+    # FATF "high-risk jurisdictions subject to a call for action". The list is revised three
+    # times a year - check it against fatf-gafi.org before relying on it.
+    high-risk-countries: [KP, IR, MM]
 
 server:
   port: 8083
@@ -18,3 +69,7 @@ management:
     web:
       exposure:
         include: health,info
+
+logging:
+  level:
+    com.sparsh.sentinel: DEBUG

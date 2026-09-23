@@ -44,6 +44,10 @@ services:
       KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: 1
       KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: 1
       KAFKA_GROUP_INITIAL_REBALANCE_DELAY_MS: 0
+      # Topics are declared by the services that own them. With auto-creation on, a misspelt
+      # topic name is silently created with one partition instead of failing - which is how a
+      # dead-letter topic nobody watches comes into existence.
+      KAFKA_AUTO_CREATE_TOPICS_ENABLE: "false"
 
   ollama:
     image: ollama/ollama:latest
