@@ -8,23 +8,36 @@ feature-order manifest — nothing else.
 
 | Notebook | Model | Kind | Job |
 |---|---|---|---|
-| `01_fraud_supervised.ipynb` | XGBoost | Supervised | Classify against *known* fraud patterns |
+| `01_fraud_supervised.ipynb` | XGBoost | Supervised | Score against *known* laundering patterns |
 | `02_anomaly_unsupervised.ipynb` | Isolation Forest | Unsupervised | Flag behaviour unlike anything normal, including patterns nobody has labelled |
-| `03_segmentation.ipynb` | KMeans | Unsupervised | Peer groups, so "unusual" is judged within a segment |
+| `03_segmentation.ipynb` | KMeans | Unsupervised | Peer segments, and the Isolation Forest's threshold within each one |
 
-Why all three, and why PR-AUC rather than accuracy: `../docs/design-decisions.md` §3.
+Run them in that order — `03` reads the model `02` exported. Why all three, and why PR-AUC
+rather than accuracy: `../docs/design-decisions.md` §3. What they achieve and where they fall
+short: §14.
 
 ## Data
 
-The [Kaggle credit-card fraud dataset](https://www.kaggle.com/datasets/mlg-ulb/creditcardfraud)
-— 284,807 transactions, 492 of them fraudulent (0.17%), features anonymised by PCA.
+IBM's [Transactions for Anti-Money-Laundering](https://www.kaggle.com/datasets/ealtman2019/ibm-transactions-for-anti-money-laundering-aml),
+the `HI-Small_Trans.csv` file — about 5M synthetic payments between accounts, 0.1% of them
+laundering. Unlike an anonymised dataset, every column maps onto a Sentinel transaction, so
+`scoring-service` can build the same features the models were trained on.
 
-It is **not committed**; `ml/data/` is gitignored. Download it manually, or:
+It is **not committed**; `ml/data/` is gitignored. Fetch it with `kagglehub` (installed by the
+requirements; at the time of writing this public dataset downloads without a Kaggle login):
 
 ```bash
-pip install kaggle          # then put your API token in ~/.kaggle/kaggle.json
-kaggle datasets download -d mlg-ulb/creditcardfraud -p data --unzip
+# from ml/, with the venv below active
+mkdir data
+python -c "import kagglehub, shutil; shutil.copy(kagglehub.dataset_download('ealtman2019/ibm-transactions-for-anti-money-laundering-aml', path='HI-Small_Trans.csv'), 'data/')"
 ```
+
+## Features
+
+`sentinel_features.py` turns payments into model rows and is shared by all three notebooks.
+Its `FEATURES` list is mirrored by `scoring-service/.../model/ModelFeatures.java`; change one
+and you must change the other, or the service refuses to load the models. The first notebook
+run builds the features (about two minutes) and caches them as `data/HI-Small_Trans.features.parquet`.
 
 ## Setup
 
@@ -35,11 +48,8 @@ pip install -r requirements.txt
 jupyter lab
 ```
 
-> **Note on the local Python.** This machine has Python 3.14. Some of these libraries may not
-> publish wheels for it yet, which means a slow source build or an outright failure. If
-> `pip install` struggles, create the venv from a Python 3.11 or 3.12 instead — nothing here
-> needs a new language feature. Google Colab is also a perfectly good option for the notebooks;
-> only the exported `.onnx` files matter downstream.
+Python 3.14 works with current wheels. Google Colab is also fine — only the exported files
+matter downstream.
 
 ## Exporting
 
@@ -54,5 +64,9 @@ The manifest is not optional. `scoring-service` asserts that its Java feature bu
 the same order, because a silent feature-order mismatch yields plausible but wrong scores —
 the worst failure mode in this system.
 
-`models/*.onnx` is gitignored. Regenerate by running the notebooks; document any
-hyperparameters worth keeping in the notebook itself.
+The `.onnx` files also carry metadata of their own: the feature list (checked when the service
+loads the model), a few recorded rows with Python's outputs (replayed by `OnnxParityTest` in
+Java), and, in `segments_kmeans.onnx`, the per-segment anomaly thresholds.
+
+`models/*.onnx` is gitignored. Regenerate by running the notebooks; keep notebook outputs
+cleared before committing.

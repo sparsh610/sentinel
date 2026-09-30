@@ -1,0 +1,16 @@
+[
+  "log_amount_eur",
+  "is_credit",
+  "channel_cash",
+  "channel_card",
+  "channel_transfer",
+  "hour_of_day",
+  "log_count_24h",
+  "log_sum_24h",
+  "log_credit_count_24h",
+  "log_cash_count_24h",
+  "log_count_7d",
+  "log_amount_vs_7d",
+  "is_new_counterparty",
+  "log_new_counterparties_24h"
+]
