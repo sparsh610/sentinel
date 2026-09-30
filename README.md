@@ -142,11 +142,16 @@ curl -X POST http://localhost:8082/api/transactions      -H "Content-Type: appli
 | `POST :8082/api/simulations` | Demo traffic with planted typologies |
 | `GET :8083/api/alerts` | The open queue, most serious first, each alert with the findings that raised it |
 
-Detection this week is three rules: cash at or above EUR 10,000, **structuring** (three or more
-cash deposits just under that within 24 hours), and any payment involving a FATF high-risk
-jurisdiction. The ML models join them in week 4 behind the same interface —
-[`docs/design-decisions.md`](docs/design-decisions.md) §13 explains why the rules stay. The
-customers in `db/demo` are synthetic.
+Detection is three rules — cash at or above EUR 10,000, **structuring** (three or more cash
+deposits just under that within 24 hours), and any payment involving a FATF high-risk
+jurisdiction — plus two model detectors behind the same interface: an XGBoost classifier
+trained on labelled laundering, and an Isolation Forest judged within KMeans peer segments.
+[`docs/design-decisions.md`](docs/design-decisions.md) §13 explains why the rules stay, and §14
+what the models achieve and where they fall short. The customers in `db/demo` are synthetic.
+
+The models are build output, not source: train them once with the notebooks in
+[`ml/`](ml/README.md) (about 15 minutes). Until then scoring-service starts with the rules
+alone and says so in its log.
 
 ## The copilot API
 
@@ -253,7 +258,7 @@ cannot close a case on its own.
 ```
 copilot-service/   RAG over policy documents + the investigation agent
 tx-ingest/         accepts transactions, publishes them to Kafka through an outbox
-scoring-service/   scores the stream (rules now, ONNX models from week 4), raises alerts
+scoring-service/   scores the stream with rules and ONNX models, raises alerts
 console/           Angular analyst UI
 ml/                Python notebooks that train the models and export ONNX
 db/init/           Postgres bootstrap (pgvector extension, schemas)
@@ -262,9 +267,9 @@ docs/              architecture, design decisions, roadmap
 
 ## A note on the data
 
-The fraud models are trained on the public
-[Kaggle credit-card fraud dataset](https://www.kaggle.com/datasets/mlg-ulb/creditcardfraud)
-(anonymised, PCA-transformed). The dataset is **not** committed to this repository; see
+The models are trained on IBM's public
+[Transactions for Anti-Money-Laundering](https://www.kaggle.com/datasets/ealtman2019/ibm-transactions-for-anti-money-laundering-aml)
+dataset (synthetic, labelled). It is **not** committed to this repository; see
 [`ml/README.md`](ml/README.md) for how to fetch it. All customers, transactions and policy
 documents in the demo are synthetic.
 

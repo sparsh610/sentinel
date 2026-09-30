@@ -114,6 +114,12 @@ td {
   border: 1px solid var(--line);
   font-size: 0.75rem;
   white-space: nowrap;
+
+  // A model's finding is a statistical signal, not a rule someone wrote: dashed, so the
+  // analyst can tell the two apart at a glance.
+  &[data-rule^='ML_'] {
+    border-style: dashed;
+  }
 }
 
 .sub {

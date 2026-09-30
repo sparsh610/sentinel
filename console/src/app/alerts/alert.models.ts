@@ -1,6 +1,11 @@
 /** Mirrors the scoring-service and tx-ingest APIs. Kept in one place so a contract change breaks compilation. */
 
-export type Rule = 'LARGE_CASH' | 'STRUCTURING' | 'HIGH_RISK_JURISDICTION';
+export type Rule =
+  | 'LARGE_CASH'
+  | 'STRUCTURING'
+  | 'HIGH_RISK_JURISDICTION'
+  | 'ML_CLASSIFIER'
+  | 'ML_ANOMALY';
 
 export type AlertStatus = 'OPEN' | 'IN_REVIEW' | 'ESCALATED' | 'CLOSED';
 
@@ -38,4 +43,6 @@ export const RULE_LABELS: Record<Rule, string> = {
   LARGE_CASH: 'Large cash',
   STRUCTURING: 'Structuring',
   HIGH_RISK_JURISDICTION: 'High-risk jurisdiction',
+  ML_CLASSIFIER: 'Model: known pattern',
+  ML_ANOMALY: 'Model: unusual for peers',
 };

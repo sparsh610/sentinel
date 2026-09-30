@@ -8,7 +8,7 @@ its own — nothing waits for the end.
 | 0 | Repo scaffold: modules, Compose stack, CI, docs | ✅ Done |
 | 1–2 | **Retrieval.** Document upload, chunking, embeddings in pgvector, chat answers with citations. Minimal Angular chat | ✅ Done |
 | 3 | **Stream.** Kafka, `tx-ingest`, transaction/alert schema, alert queue in the console. Detection is rule-based this week (large cash, structuring, high-risk jurisdiction); the models join them in week 4 | ✅ Done |
-| 4 | **Models.** XGBoost + Isolation Forest + KMeans trained in `ml/`, exported to ONNX, served by `scoring-service`. **v1.0 tag** | ⬜ |
+| 4 | **Models.** XGBoost + Isolation Forest + KMeans trained in `ml/` on the IBM AML data, exported to ONNX, served by `scoring-service` next to the rules. **v1.0 tag** once the definition of done below is met | 🟡 Models done |
 | 5–6 | **Agent.** Planner + tools, step limits, execution trace, analyst approve/reject flow | ⬜ |
 | 6 | **MCP.** Publish the same tools as an MCP server from `copilot-service`; demo an external MCP client investigating a live alert. Thin adapter over existing tools — if the tools are not finished, this is not started | ⬜ |
 | 7 | **Controls.** Keycloak roles, document ACLs enforced at retrieval, PII masking, audit log — enforced **in the tools**, so they cover the MCP entry point too | ⬜ |

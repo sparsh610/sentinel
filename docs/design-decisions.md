@@ -59,8 +59,8 @@ This is the core modelling decision, and it is not padding.
 
 An alert carries all three signals, and the analyst sees which one fired.
 
-**On metrics:** the Kaggle dataset is roughly 0.17% positive. Accuracy is meaningless there — a
-model predicting "never fraud" scores 99.8%. The model is evaluated on **PR-AUC**, and the
+**On metrics:** the training data is about 0.1% laundering. Accuracy is meaningless there — a
+model predicting "never laundering" scores 99.9%. The model is evaluated on **PR-AUC**, and the
 decision threshold is chosen from the precision/recall curve, because the threshold is a
 business decision about how many false positives the investigation team can actually work
 through in a day, not a modelling one.
@@ -240,15 +240,68 @@ payments involving a FATF high-risk jurisdiction. They are not a placeholder for
 - **Rules are explainable line by line.** Each finding carries a sentence naming the facts that
   fired it, which is what an analyst reads first.
 - **Models cover what nobody wrote a rule for** (§3). The two are complementary. Every source of
-  suspicion implements one `Detector` interface, so the models arrive in week 4 as more
-  detectors and the rules stay.
+  suspicion implements one `Detector` interface, so the models arrived in week 4 as two more
+  detectors and the rules stayed.
 
 The rule scores (0.60 / 0.75 / 0.85) are fixed weights, not probabilities. They exist so the
-queue sorts on one column once the models add calibrated scores next to them, and they are
-stated honestly as such.
+queue sorts on one column next to the models' scores, and they are stated honestly as such —
+as is the classifier's score, which is a ranking, not a calibrated probability (§14).
 
 **Known limit:** the structuring rule looks back from each deposit's booking time. A deposit
 that arrives out of order — booked earlier than one already scored — still counts towards
 later deposits but does not trigger on its own arrival. Late-arriving data is normal in
 payments; handling it properly needs event-time windows, which is more machinery than this
 stage justifies.
+
+## 14. Why the models are trained on the IBM AML data, and what they actually achieve
+
+**Rejected:** the Kaggle credit-card fraud dataset, which the original plan named. Its features
+are `V1`–`V28`, the output of a PCA whose inputs were never published. `scoring-service` could
+never compute them from a Sentinel transaction, so a model trained on them could be evaluated
+in a notebook but never served. It would also have been card fraud, not money laundering.
+
+**Chosen:** IBM's *Transactions for Anti-Money-Laundering* (`HI-Small`, about 5M synthetic
+payments, 0.1% laundering, from Altman et al., NeurIPS 2023). Each row has a timestamp, both
+accounts, an amount, a currency and a payment type — all of which map onto Sentinel's
+transaction, so the features can be built identically on both sides:
+
+- Each payment becomes two rows, a DEBIT for the payer and a CREDIT for the payee, because
+  Sentinel scores from one customer's side. Cash/card/ACH/wire/cheque map to Sentinel's three
+  channels; Bitcoin and self-transfers ("reinvestment") have no equivalent and are dropped.
+- The 14 features (`ml/sentinel_features.py`, mirrored by `ModelFeatures.java`) are the
+  transaction itself plus the customer's last 24 hours and 7 days, as the `scored_transaction`
+  ledger can answer them in one query. The split is by time, never random.
+- Two of them — "first transaction with this counterparty" and "new counterparties in the last
+  24 hours" — took the classifier's PR-AUC from **0.04 to 0.31**. Laundering in this data is a
+  graph pattern (fan-out, fan-in, chains), and those are the parts of the graph one account's
+  ledger can see. They are why the ledger gained a `counterparty_name` column (migration V2).
+
+**What the models achieve, on the later days they never saw:**
+
+| Model | Result | What it means |
+|---|---|---|
+| XGBoost | PR-AUC **0.31** (random: 0.0016) | At the 0.98 threshold, about 1 alert in 3 is laundering and 38% of it is caught |
+| Isolation Forest | PR-AUC **0.002** | Barely above random against the labels |
+| KMeans (k = 4) | 4 segments: cash, transfers, cards, and very high-volume accounts | Each at its training data's most unusual 0.1%: per-segment thresholds flagged 585 of 1M test rows and caught 2 laundering; one global threshold flagged 20 and caught none |
+
+**Known limits, stated rather than hidden:**
+
+- **The Isolation Forest adds little on this data.** IBM's laundering is not statistically
+  *unusual* on these features — it looks like ordinary transfers to new counterparties, which
+  only a labelled model learns. It is kept because its job is the pattern nobody labelled yet,
+  which no labelled test set can measure, and it carries a low fixed score (0.40) so it ranks
+  below every rule.
+- **The classifier's score is not a probability.** Training weighted the rare laundering rows
+  about a thousand times up, which pushes outputs towards 1. It ranks; it is not calibrated.
+  The analyst's text says "model score", never a percentage.
+- **Domain shift.** The model learned "first payment to a new counterparty" as its strongest
+  signal. In Sentinel's simulated traffic, a retail customer's first payment to IKEA looks the
+  same, so the demo shows classifier alerts that an analyst would close. A bank would retrain
+  on its own labelled cases; this project cannot.
+- **Two copies of one query.** Each model detector builds its own features, so a transaction
+  costs the ledger query twice. Sharing it would couple the detectors or add a per-transaction
+  cache; at this volume the query is the cheaper option.
+- **Feature parity is tested on names and arithmetic, not on the SQL.** `ModelFeaturesTest`
+  checks the order against the committed manifests and each feature's formula; the window
+  query itself runs against Postgres only when the service does. A Testcontainers test for it
+  belongs with week 8's.

@@ -4,9 +4,10 @@
 
 1. **Ingest.** `tx-ingest` accepts a transaction (REST) or replays a file of them, writes it to
    Postgres and publishes it to the `transactions` Kafka topic.
-2. **Score.** `scoring-service` consumes the topic. For each transaction it runs three ONNX
-   models — the supervised fraud classifier, the Isolation Forest, and the KMeans segment
-   assignment — and combines the signals. Above the threshold it writes an **alert**.
+2. **Score.** `scoring-service` consumes the topic. For each transaction it runs three rules and
+   three ONNX models — the supervised classifier, and the Isolation Forest judged within the
+   peer segment KMeans assigns. If any of them fires it writes one **alert** carrying every
+   finding.
 3. **Investigate.** An analyst opens the alert in the console. The investigation agent in
    `copilot-service` runs its tools: pull the customer's recent transactions, place the
    transaction against its peer segment, retrieve the policy clause that applies, and draft a
@@ -33,16 +34,19 @@ A repeated `externalRef` is a no-op, so senders can retry safely.
 Loads the `.onnx` files produced by `ml/` at start-up and holds them in memory. CPU-bound,
 steady throughput. Owns the alert table and the scoring threshold.
 
-Every source of suspicion is a `Detector`. Today those are three rules — large cash,
-structuring, high-risk jurisdiction — and the models join them in week 4
-([§13](design-decisions.md#13-why-rules-ship-before-the-models-and-stay-after)). A transaction
+Every source of suspicion is a `Detector`: three rules — large cash, structuring, high-risk
+jurisdiction — and two model detectors
+([§13](design-decisions.md#13-why-rules-ship-before-the-models-and-stay-after),
+[§14](design-decisions.md#14-why-the-models-are-trained-on-the-ibm-aml-data-and-what-they-actually-achieve)).
+Without exported models the service starts anyway and scores with the rules alone. A transaction
 yields at most one alert, carrying every finding against it. The `scored_transaction` ledger
 makes redelivery a no-op and is the history the structuring rule looks back over. A record
 that cannot be parsed goes to `transactions-dlt` instead of blocking its partition.
 
 The **feature contract** between training and serving lives here: the feature order in
 `ml/models/<model>.features.json` must match what the Java feature builder produces. A test
-asserts this, because a silent feature-order mismatch produces plausible, wrong scores — the
+asserts this, and each `.onnx` file carries its own feature list, which is checked again when
+the service loads it, because a silent feature-order mismatch produces plausible, wrong scores — the
 worst possible failure mode.
 
 ### `copilot-service` (:8081)
