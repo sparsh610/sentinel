@@ -45,13 +45,12 @@
             <artifactId>spring-boot-starter-validation</artifactId>
         </dependency>
 
-        <!-- Week 4: uncomment to load the ONNX models exported from ml/.
+        <!-- Runs the models exported from ml/ in-process: no Python on the scoring path. -->
         <dependency>
             <groupId>com.microsoft.onnxruntime</groupId>
             <artifactId>onnxruntime</artifactId>
-            <version>1.20.0</version>
+            <version>1.22.0</version>
         </dependency>
-        -->
     </dependencies>
 
     <build>

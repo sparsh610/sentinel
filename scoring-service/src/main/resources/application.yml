@@ -60,6 +60,14 @@ sentinel:
     # FATF "high-risk jurisdictions subject to a call for action". The list is revised three
     # times a year - check it against fatf-gafi.org before relying on it.
     high-risk-countries: [KP, IR, MM]
+    models:
+      # The notebooks in ml/notebooks export here. Relative to where the service is started;
+      # `mvn -pl scoring-service spring-boot:run` starts it in scoring-service/.
+      dir: ${SENTINEL_MODELS_DIR:../ml/models}
+      # From the precision/recall table in notebook 01: at 0.98 about one alert in three is
+      # laundering and 38% of it is caught, on days the model never saw.
+      classifier-threshold: 0.98
+      anomaly-score: 0.40
 
 server:
   port: 8083

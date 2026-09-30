@@ -44,8 +44,9 @@ class ScoringApplicationTests {
     private TransactionListener listener;
 
     @Test
-    void everyRuleIsWiredIn() {
-        assertThat(detectors).hasSize(3);
+    void everyDetectorIsWiredInEvenWithoutExportedModels() {
+        // Three rules and two model detectors; the model ones stay quiet until models exist.
+        assertThat(detectors).hasSize(5);
     }
 
     @Test

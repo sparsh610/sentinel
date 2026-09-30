@@ -26,3 +26,8 @@ sentinel:
       min-count: 3
       window: 24h
     high-risk-countries: [KP, IR, MM]
+    models:
+      # Nowhere: the context must start without exported models, as it does in CI.
+      dir: target/no-models
+      classifier-threshold: 0.98
+      anomaly-score: 0.40

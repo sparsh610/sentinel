@@ -7,10 +7,10 @@ import java.util.Optional;
 /**
  * One source of suspicion.
  *
- * <p>This week every detector is a rule. In week 4 the ONNX models - the supervised classifier,
- * the Isolation Forest - arrive as more implementations of this interface, and the rules stay.
- * Banks run both: rules encode what a regulator explicitly asks to be monitored, and are
- * explainable line by line; models catch what nobody wrote a rule for.
+ * <p>Three are rules and two run the ONNX models exported from {@code ml/}: the supervised
+ * classifier, and the Isolation Forest judged within a KMeans peer segment. Banks run both
+ * kinds: rules encode what a regulator explicitly asks to be monitored, and are explainable line
+ * by line; models catch what nobody wrote a rule for.
  */
 public interface Detector {
 

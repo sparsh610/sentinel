@@ -40,6 +40,9 @@ public class ScoredTransaction {
     @Column(name = "counterparty_country", length = 2)
     private String counterpartyCountry;
 
+    @Column(name = "counterparty_name", length = 256)
+    private String counterpartyName;
+
     @Column(name = "booked_at", nullable = false)
     private Instant bookedAt;
 
@@ -59,6 +62,7 @@ public class ScoredTransaction {
         tx.amount = event.amount();
         tx.currency = event.currency();
         tx.counterpartyCountry = event.counterpartyCountry();
+        tx.counterpartyName = event.counterpartyName();
         tx.bookedAt = event.bookedAt();
         tx.scoredAt = scoredAt;
         return tx;
@@ -90,6 +94,10 @@ public class ScoredTransaction {
 
     public String getCounterpartyCountry() {
         return counterpartyCountry;
+    }
+
+    public String getCounterpartyName() {
+        return counterpartyName;
     }
 
     public Instant getBookedAt() {
