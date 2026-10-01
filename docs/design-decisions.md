@@ -142,6 +142,27 @@ stays in the console, behind a human (see §5).
 in the tools themselves rather than at the controller. That is the correct place for it anyway,
 but it is a real constraint to hold on to as tools are added.
 
+**As built (week 6).** `SentinelMcpTools` publishes seven tools over Streamable HTTP at `/mcp`:
+`listOpenAlerts`, `riskScore`, `customerHistory`, `peerSegment`, `policyLookup`, `draftCaseNote`
+(runs Sentinel's own agent and returns its draft) and `getInvestigation`. Each delegates to the
+code the internal agent uses. Claude Code and Codex CLI connect with one command each, and the
+client's own model does the reasoning — so a strong model investigates without Sentinel holding
+an API key, and the client pays for its own inference.
+
+- **Off by default.** The server starts only with the `mcp` profile. Until week 7 brings
+  masking and authentication, what these tools return reaches the client's model provider, so
+  the profile is for the synthetic demo data and localhost only, and says so in its config.
+- **Published to the MCP server only.** The tools go to the server as MCP tool specifications,
+  not as a `ToolCallbackProvider` bean: Spring AI gathers provider beans into the resolver its
+  own chat models use, which would have made them callable by Sentinel's internal model too —
+  and did tie the agent, the chat model and that resolver into a startup cycle. A context test
+  with the real chat model guards against both.
+- **Nothing that decides.** A test fails if a published tool's name suggests approving,
+  escalating, closing, reporting or signing off. Identifiers coming from the model are parsed
+  before any call is made.
+- **Every call is logged** with its arguments; week 7 turns those lines into `audit_event` rows.
+
+
 ## 9. Why the model runs locally by default
 
 Ollama is the default and a hosted endpoint is opt-in (the `cloud` profile), rather than the

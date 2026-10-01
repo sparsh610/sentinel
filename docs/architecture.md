@@ -61,6 +61,10 @@ Two responsibilities that share a vector store:
 
 Responses stream to the console over SSE.
 
+With the `mcp` profile it is also an **MCP server** (Streamable HTTP, `/mcp`) publishing the
+same tools to external clients such as Claude Code and Codex CLI — read tools and a draft, never
+a decision ([§8](design-decisions.md#8-why-the-agents-tools-are-also-exposed-over-mcp)).
+
 ### `console` (:4200)
 Angular. Three screens: the alert queue, the case view (evidence, draft note, execution trace,
 approve/reject), and the copilot chat. Later, the evaluation page.

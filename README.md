@@ -174,6 +174,23 @@ Without it the investigation still completes, with a template note built from th
 evidence. Set `SENTINEL_AGENT_PLANNER=LLM` to let the model choose the tools instead of the
 fixed plan. Why it works this way: [`docs/design-decisions.md`](docs/design-decisions.md) §5 and §15.
 
+### Investigating from Claude Code or Codex (MCP)
+
+The same tools are published as an MCP server, so a coding-agent CLI can investigate an alert
+with its own model. Demo data only until week 7 adds masking — see `application-mcp.yml`.
+
+```bash
+mvn -pl copilot-service spring-boot:run -Dspring-boot.run.profiles=mcp
+
+claude mcp add --transport http sentinel http://localhost:8081/mcp   # Claude Code
+codex mcp add sentinel --url http://localhost:8081/mcp               # Codex CLI
+```
+
+Then ask, for example: *"Using the sentinel tools, find an open alert with a high-risk
+jurisdiction finding, gather the customer's history, its peer segment and the policy that
+applies, and summarise the case with clause numbers."* No tool can decide a case; that stays in
+the console.
+
 ## The copilot API
 
 Ingest a policy document, then ask questions over it. There is a synthetic corpus to try in
