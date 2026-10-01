@@ -63,15 +63,13 @@
             <artifactId>spring-boot-starter-validation</artifactId>
         </dependency>
 
-        <!-- Week 6: publish the investigation tools as an MCP server. Thin adapter over the
-             tools the agent already uses - do not start this before those tools exist.
-             Verify the exact artifact id against the Spring AI version in the parent pom
-             before uncommenting; the MCP starter names changed during the 1.0 line.
+        <!-- Publishes the investigation tools as an MCP server (Streamable HTTP at /mcp), so an
+             external client - Claude Code, Codex CLI - can investigate with them. Off unless the
+             "mcp" profile is active: see application-mcp.yml. -->
         <dependency>
             <groupId>org.springframework.ai</groupId>
             <artifactId>spring-ai-starter-mcp-server-webmvc</artifactId>
         </dependency>
-        -->
     </dependencies>
 
     <build>

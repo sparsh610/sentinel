@@ -26,6 +26,11 @@ spring:
       max-request-size: 25MB
 
   ai:
+    # The MCP server is off unless the "mcp" profile turns it on - see application-mcp.yml.
+    mcp:
+      server:
+        enabled: false
+
     # Default: everything local, no API key, no data leaving the machine.
     # Activate the "cloud" profile to move chat generation to a hosted model.
     model:

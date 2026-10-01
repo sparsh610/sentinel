@@ -1,0 +1,34 @@
+# Publishes the investigation tools as an MCP server, so Claude Code or Codex CLI can use them.
+#
+#   mvn -pl copilot-service spring-boot:run -Dspring-boot.run.profiles=mcp
+#   claude mcp add --transport http sentinel http://localhost:8081/mcp
+#   codex mcp add sentinel --url http://localhost:8081/mcp
+#
+# ---------------------------------------------------------------------------------------
+# WARNING - the client on the other end is a hosted model. What the tools return - alerts,
+# customer histories, counterparties - goes to that model's provider.
+#
+# Demo only, against the synthetic customers in db/demo. Masking personal data before it leaves
+# the service arrives in week 7, and with it authentication on this endpoint; until then do not
+# run this profile against real data, and do not expose port 8081 beyond localhost.
+#
+# What it cannot do, by design: no tool approves, escalates, closes or reports a case. The MCP
+# client can read evidence and ask Sentinel's own agent for a draft; people decide, in the
+# console (docs/design-decisions.md §8).
+# ---------------------------------------------------------------------------------------
+
+spring:
+  ai:
+    mcp:
+      server:
+        enabled: true
+        name: sentinel
+        version: 0.6.0
+        # Streamable HTTP, at /mcp - what both Claude Code and Codex CLI speak.
+        protocol: STREAMABLE
+        instructions: >
+          Sentinel is a transaction-monitoring system for anti-money-laundering. Start with
+          listOpenAlerts; use riskScore, customerHistory, peerSegment and policyLookup to gather
+          evidence about one alert, and cite policy clauses by number. draftCaseNote asks
+          Sentinel's own agent for a draft. Decisions are made by people in the Sentinel console;
+          no tool here can make one.

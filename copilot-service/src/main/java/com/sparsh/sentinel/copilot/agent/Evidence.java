@@ -13,7 +13,7 @@ import java.util.Set;
  * What the tools found for one investigation, filled in as they run. The case note is written
  * from this and nothing else - not from the model's general knowledge.
  */
-final class Evidence {
+public final class Evidence {
 
     AlertSnapshot alert;
     History history;
@@ -25,7 +25,7 @@ final class Evidence {
     /**
      * @param recent the newest few, for the note; the totals cover everything read.
      */
-    record History(int transactions, BigDecimal moneyIn, BigDecimal moneyOut, int cashTransactions,
+    public record History(int transactions, BigDecimal moneyIn, BigDecimal moneyOut, int cashTransactions,
                    int distinctCounterparties, Set<String> counterpartyCountries, List<String> recent) {
     }
 

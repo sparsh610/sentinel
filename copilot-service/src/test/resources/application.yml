@@ -7,6 +7,9 @@
 # moderation models and fail the context for want of an API key.
 spring:
   ai:
+    mcp:
+      server:
+        enabled: false
     model:
       chat: ollama
       embedding: ollama

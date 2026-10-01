@@ -28,6 +28,14 @@ public class ScoringClient {
         return reachable(() -> http.get().uri("/api/alerts/{id}", alertId).retrieve().body(AlertSnapshot.class));
     }
 
+    /** The open queue, most serious first. */
+    public List<AlertSnapshot> openAlerts(int limit) {
+        return reachable(() -> http.get()
+                .uri(uri -> uri.path("/api/alerts").queryParam("status", "OPEN").queryParam("limit", limit).build())
+                .retrieve()
+                .body(new org.springframework.core.ParameterizedTypeReference<List<AlertSnapshot>>() { }));
+    }
+
     public PeerSegment peerSegment(UUID transactionId) {
         return reachable(() -> http.get().uri("/api/transactions/{id}/peer-segment", transactionId)
                 .retrieve().body(PeerSegment.class));
