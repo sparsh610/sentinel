@@ -1,0 +1,272 @@
+:host {
+  --ink: #1b1f24;
+  --muted: #5b6673;
+  --line: #dfe3e8;
+  --accent: #1f5fa9;
+  --hover: #f4f7fb;
+  --error: #a32020;
+  --ok: #1d7a46;
+  --warn: #9a6400;
+
+  display: block;
+  height: 100%;
+  overflow-y: auto;
+  color: var(--ink);
+}
+
+.back {
+  display: inline-block;
+  margin-bottom: 0.75rem;
+  color: var(--accent);
+  font-size: 0.85rem;
+  text-decoration: none;
+}
+
+.head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 1rem;
+  margin-bottom: 1rem;
+
+  h2 {
+    margin: 0;
+    font-size: 1.05rem;
+  }
+}
+
+.meta,
+.sub {
+  color: var(--muted);
+  font-size: 0.8rem;
+}
+
+.meta {
+  margin: 0.25rem 0 0;
+}
+
+.error {
+  margin: 0 0 0.75rem;
+  color: var(--error);
+  font-size: 0.85rem;
+}
+
+.status {
+  flex: none;
+  padding: 0.15rem 0.6rem;
+  border-radius: 0.8rem;
+  border: 1px solid var(--line);
+  font-size: 0.78rem;
+  white-space: nowrap;
+
+  &[data-status='RUNNING'],
+  &[data-status='DRAFTED'],
+  &[data-status='AWAITING_SIGN_OFF'] {
+    border-color: var(--warn);
+    color: var(--warn);
+  }
+
+  &[data-status='REPORTED'] {
+    border-color: var(--error);
+    color: var(--error);
+  }
+
+  &[data-status='CLOSED'] {
+    border-color: var(--ok);
+    color: var(--ok);
+  }
+
+  &[data-status='FAILED'] {
+    border-color: var(--error);
+    background: var(--error);
+    color: #fff;
+  }
+}
+
+.columns {
+  display: grid;
+  grid-template-columns: minmax(16rem, 2fr) 3fr;
+  gap: 1.5rem;
+
+  @media (max-width: 52rem) {
+    grid-template-columns: 1fr;
+  }
+}
+
+h3 {
+  margin: 0 0 0.5rem;
+  font-size: 0.9rem;
+}
+
+.trace ol {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+
+  li {
+    border-left: 3px solid var(--ok);
+    margin-bottom: 0.4rem;
+    background: #fff;
+
+    &[data-status='ERROR'] {
+      border-left-color: var(--error);
+    }
+
+    &[data-status='REFUSED'] {
+      border-left-color: var(--warn);
+    }
+
+    &.working {
+      border-left: 3px dashed var(--line);
+      padding: 0.45rem 0.6rem;
+      color: var(--muted);
+      font-size: 0.85rem;
+    }
+  }
+
+  .step {
+    display: grid;
+    grid-template-columns: 1fr auto;
+    width: 100%;
+    padding: 0.45rem 0.6rem;
+    border: 1px solid var(--line);
+    border-left: none;
+    background: none;
+    font: inherit;
+    text-align: left;
+    cursor: pointer;
+
+    &:hover {
+      background: var(--hover);
+    }
+  }
+
+  .tool {
+    font-weight: 600;
+    font-size: 0.85rem;
+  }
+
+  .step-status {
+    font-size: 0.72rem;
+    color: var(--muted);
+  }
+
+  .sub {
+    grid-column: 1 / -1;
+  }
+}
+
+.io {
+  padding: 0.25rem 0.6rem 0.6rem;
+  border: 1px solid var(--line);
+  border-top: none;
+
+  h4 {
+    margin: 0.4rem 0 0.2rem;
+    font-size: 0.72rem;
+    color: var(--muted);
+    text-transform: uppercase;
+  }
+
+  pre {
+    margin: 0;
+    max-height: 14rem;
+    overflow: auto;
+    font-size: 0.72rem;
+    white-space: pre-wrap;
+    word-break: break-word;
+  }
+}
+
+.badge {
+  margin-left: 0.4rem;
+  padding: 0.05rem 0.45rem;
+  border-radius: 0.6rem;
+  border: 1px solid var(--accent);
+  color: var(--accent);
+  font-size: 0.7rem;
+  font-weight: normal;
+
+  &.template {
+    border-color: var(--warn);
+    color: var(--warn);
+  }
+}
+
+.note {
+  margin: 0 0 1.25rem;
+  padding: 0.75rem 0.9rem;
+  border: 1px solid var(--line);
+  background: #fafbfc;
+  font: inherit;
+  font-size: 0.85rem;
+  line-height: 1.5;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.decision {
+  margin-bottom: 1.25rem;
+  padding: 0.75rem 0.9rem;
+  border: 1px solid var(--line);
+
+  label {
+    display: block;
+    margin-top: 0.6rem;
+    font-size: 0.8rem;
+    color: var(--muted);
+  }
+
+  input,
+  textarea {
+    display: block;
+    width: 100%;
+    box-sizing: border-box;
+    margin-top: 0.2rem;
+    padding: 0.35rem 0.5rem;
+    border: 1px solid var(--line);
+    border-radius: 0.25rem;
+    font: inherit;
+    font-size: 0.85rem;
+    color: var(--ink);
+  }
+
+  .actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+    margin-top: 0.75rem;
+  }
+}
+
+button {
+  font: inherit;
+  font-size: 0.85rem;
+  padding: 0.4rem 0.9rem;
+  border: 1px solid var(--accent);
+  border-radius: 0.3rem;
+  background: #fff;
+  color: var(--accent);
+  cursor: pointer;
+
+  &.primary {
+    background: var(--accent);
+    color: #fff;
+  }
+
+  &:disabled {
+    opacity: 0.6;
+    cursor: default;
+  }
+}
+
+.decisions {
+  margin: 0;
+  padding-left: 1.1rem;
+  font-size: 0.85rem;
+  line-height: 1.5;
+
+  .comment {
+    color: var(--muted);
+  }
+}

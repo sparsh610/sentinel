@@ -1,0 +1,128 @@
+<section class="investigation">
+  <a routerLink="/alerts" class="back">← Alerts</a>
+
+  @if (error(); as message) {
+    <p class="error" role="alert">{{ message }}</p>
+  }
+
+  @if (investigation(); as inv) {
+    <header class="head">
+      <div>
+        <h2>Investigation · {{ inv.customerId }} · {{ inv.amount | currency: inv.currency }}</h2>
+        <p class="meta">
+          Started {{ inv.startedAt | date: 'dd MMM yyyy, HH:mm:ss' }} ·
+          {{ inv.planner === 'LLM' ? 'the local model chose the tools' : 'fixed investigation plan' }}
+        </p>
+      </div>
+      <span class="status" [attr.data-status]="inv.status">{{ statusLabel() }}</span>
+    </header>
+
+    <div class="columns">
+      <section class="trace" aria-label="Execution trace">
+        <h3>Execution trace</h3>
+        <ol>
+          @for (step of inv.steps; track step.stepNo) {
+            <li [attr.data-status]="step.status">
+              <button type="button" class="step" (click)="toggleStep(step)"
+                      [attr.aria-expanded]="openStep() === step.stepNo">
+                <span class="tool">{{ toolLabel(step) }}</span>
+                <span class="step-status">{{ step.status }}</span>
+                <span class="sub">
+                  {{ step.durationMs }} ms
+                  @if (requestedBy(step); as by) { · asked by {{ by }} }
+                </span>
+              </button>
+              @if (openStep() === step.stepNo) {
+                <div class="io">
+                  <h4>Input</h4>
+                  <pre>{{ step.input }}</pre>
+                  <h4>Output</h4>
+                  <pre>{{ step.output ?? '—' }}</pre>
+                </div>
+              }
+            </li>
+          }
+          @if (inv.status === 'RUNNING') {
+            <li class="working">Working…</li>
+          }
+        </ol>
+      </section>
+
+      <section class="case">
+        <h3>
+          Case note
+          @if (inv.noteSource === 'MODEL') {
+            <span class="badge">drafted by the local model</span>
+          } @else if (inv.noteSource === 'TEMPLATE') {
+            <span class="badge template">template - model unavailable</span>
+          }
+        </h3>
+
+        @if (inv.caseNote) {
+          <pre class="note">{{ inv.caseNote }}</pre>
+        } @else if (inv.status === 'FAILED') {
+          <p class="error">{{ inv.failureReason }}</p>
+          <button type="button" (click)="runAgain()" [disabled]="busy()">Run the investigation again</button>
+        } @else {
+          <p class="meta">The agent is gathering evidence. The note appears when it has finished.</p>
+        }
+
+        @if (inv.status === 'DRAFTED' || inv.status === 'AWAITING_SIGN_OFF') {
+          <form class="decision" (submit)="$event.preventDefault()">
+            <h3>{{ inv.status === 'DRAFTED' ? 'Analyst decision' : 'Senior approver sign-off' }}</h3>
+            <p class="meta">
+              @if (inv.status === 'DRAFTED') {
+                The agent proposes; you decide. An escalation goes to a senior approver (AML-05.2).
+              } @else {
+                Must be a different person from the analyst who escalated.
+              }
+            </p>
+            <label>
+              Your name
+              <input type="text" [value]="actor()" (input)="setActor($event)" maxlength="64" autocomplete="name" />
+            </label>
+            <label>
+              Comment
+              <textarea rows="3" [value]="comment()" (input)="setComment($event)" maxlength="2000"></textarea>
+            </label>
+            <div class="actions">
+              @if (inv.status === 'DRAFTED') {
+                <button type="button" class="primary" (click)="decide('ESCALATE')" [disabled]="busy()">
+                  Escalate for sign-off
+                </button>
+                <button type="button" (click)="decide('CLOSE')" [disabled]="busy()">
+                  Close - no further action
+                </button>
+              } @else {
+                <button type="button" class="primary" (click)="decide('APPROVE')" [disabled]="busy()">
+                  Approve report
+                </button>
+                <button type="button" (click)="decide('RETURN')" [disabled]="busy()">
+                  Return to analyst
+                </button>
+              }
+            </div>
+          </form>
+        }
+
+        @if (inv.decisions.length) {
+          <h3>Decisions</h3>
+          <ul class="decisions">
+            @for (d of inv.decisions; track d.decidedAt) {
+              <li>
+                <strong>{{ d.actor }}</strong>
+                ({{ d.role === 'ANALYST' ? 'analyst' : 'senior approver' }}) - {{ d.action | lowercase }}
+                <span class="sub">{{ d.decidedAt | date: 'dd MMM, HH:mm' }}</span>
+                @if (d.comment) {
+                  <div class="comment">{{ d.comment }}</div>
+                }
+              </li>
+            }
+          </ul>
+        }
+      </section>
+    </div>
+  } @else if (!error()) {
+    <p class="meta">Loading…</p>
+  }
+</section>

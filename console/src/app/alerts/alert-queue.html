@@ -1,11 +1,16 @@
 <section class="queue">
   <header class="toolbar">
-    <h2>
-      Open alerts
-      @if (loaded()) {
-        <span class="count">{{ alerts().length }}</span>
+    <nav class="tabs" aria-label="Alert status">
+      @for (tab of tabs; track tab.status) {
+        <button type="button" class="tab" [class.active]="status() === tab.status"
+                [attr.aria-pressed]="status() === tab.status" (click)="show(tab.status)">
+          {{ tab.label }}
+          @if (status() === tab.status && loaded()) {
+            <span class="count">{{ alerts().length }}</span>
+          }
+        </button>
       }
-    </h2>
+    </nav>
 
     <button type="button" (click)="simulate()" [disabled]="simulating()">
       {{ simulating() ? 'Simulating…' : 'Simulate traffic' }}
@@ -76,6 +81,16 @@
                 Raised {{ alert.raisedAt | date: 'dd MMM yyyy, HH:mm:ss' }} ·
                 transaction <code>{{ alert.transactionId }}</code>
               </p>
+              <button type="button" class="investigate" (click)="investigate(alert, $event)"
+                      [disabled]="opening() === alert.id">
+                @if (opening() === alert.id) {
+                  Opening…
+                } @else if (alert.status === 'OPEN') {
+                  Investigate
+                } @else {
+                  Open investigation
+                }
+              </button>
             </td>
           </tr>
         }
@@ -83,7 +98,11 @@
         <tr>
           <td colspan="7" class="empty">
             @if (loaded()) {
-              No open alerts. Use <em>Simulate traffic</em> to push a batch through ingest and scoring.
+              @if (status() === 'OPEN') {
+                No open alerts. Use <em>Simulate traffic</em> to push a batch through ingest and scoring.
+              } @else {
+                No alerts here yet.
+              }
             } @else if (!error()) {
               Loading…
             }

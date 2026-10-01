@@ -19,9 +19,21 @@
   justify-content: space-between;
   margin-bottom: 0.75rem;
 
-  h2 {
-    margin: 0;
-    font-size: 1rem;
+  .tabs {
+    display: flex;
+    gap: 0.25rem;
+  }
+
+  .tab {
+    border-color: var(--line);
+    background: #fff;
+    color: var(--muted);
+
+    &.active {
+      border-color: var(--accent);
+      color: var(--accent);
+      font-weight: 600;
+    }
   }
 
   .count {
@@ -148,4 +160,20 @@ td {
   color: var(--muted);
   text-align: center;
   padding: 2rem 0.5rem;
+}
+
+.investigate {
+  font: inherit;
+  font-size: 0.85rem;
+  padding: 0.35rem 0.85rem;
+  border: 1px solid var(--accent);
+  border-radius: 0.3rem;
+  background: var(--accent);
+  color: #fff;
+  cursor: pointer;
+
+  &:disabled {
+    opacity: 0.6;
+    cursor: default;
+  }
 }

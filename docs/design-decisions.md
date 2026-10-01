@@ -78,8 +78,10 @@ through in a day, not a modelling one.
 ## 5. Why the agent cannot close a case
 
 The investigation agent gathers evidence, retrieves the applicable rule and drafts a case note.
-It **proposes**; a human analyst approves or rejects, and a senior approver signs off above a
-threshold.
+It **proposes**; a human analyst closes the case or escalates it, and an escalation becomes a
+report only when a senior approver — a different person — signs it off. That follows the sample
+policy the agent itself cites (AML-05.2: "An analyst may draft a report but may not submit one"),
+so every escalation needs the second signature, not only those above an amount.
 
 This is not timidity about the technology — it is what the domain requires. A suspicious-activity
 determination carries regulatory and legal weight and has to be attributable to a person. The
@@ -305,3 +307,47 @@ transaction, so the features can be built identically on both sides:
   checks the order against the committed manifests and each feature's formula; the window
   query itself runs against Postgres only when the service does. A Testcontainers test for it
   belongs with week 8's.
+
+## 15. Why the agent follows a fixed plan by default, on a small local model
+
+**Rejected:** letting a hosted model (Claude, GPT) plan the investigation by calling tools, and
+running a large local model (8B+) for it.
+
+- **The prompt carries customer data from here on.** Masking it before it may leave the machine
+  is week 7 (§6). Until then a hosted model is not an option — the `cloud` profile's chat model
+  is never given an investigation: the note falls back to a template and the planner to the fixed
+  plan whenever the configured chat model is not the local Ollama one (`CaseNoteWriter`).
+- **It has to run on the laptop it is demonstrated on.** `qwen2.5:3b` (1.9 GB) fits beside
+  Postgres, Kafka and three JVMs; an 8B model does not. It is unloaded a minute after use.
+- **A fixed plan is what an investigation playbook is.** The same evidence in the same order is
+  predictable, auditable and costs nothing. The model's job is the part that needs language:
+  turning the evidence into a note an analyst can read.
+
+**The LLM planner is still there** (`SENTINEL_AGENT_PLANNER=LLM`). The model proposes tool calls;
+Spring AI's own loop is switched off and the agent's loop makes them, through the same recorder
+as the fixed plan — so the step limit is enforced around the tools, not trusted to the model. The
+tools it sees take no identifiers; they are bound to the alert's customer and transaction, so no
+prompt, including text injected into a policy excerpt, can point it at another customer. A 3B
+model often calls only some tools; whatever it leaves out is filled in by the fixed plan and
+marked "model did not ask" in the trace.
+
+**What the trace and lifecycle guarantee:**
+
+- Every tool call — successful, failed, or refused by the step limit — is a row in
+  `investigation_step`, committed as it happens, with input, output and duration. The last step
+  is reserved for the note, so evidence-gathering can never crowd it out.
+- The agent stops at DRAFTED. ESCALATE and CLOSE are the analyst's; APPROVE and RETURN are the
+  senior approver's, and the person who escalated cannot sign off. Each decision is appended to
+  `investigation_decision`, and the alert's status in scoring-service moves with it (IN_REVIEW →
+  CLOSED, or → ESCALATED on sign-off).
+
+**Known limits:**
+
+- **Who decides is taken from the request** until week 7 brings authentication; the four-eyes
+  rule already holds, the role check does not yet.
+- **A 3B model writes a serviceable draft, not a reliable one.** In testing it got the amount
+  right and cited the right clauses once the clause numbers were named in its input, but it can
+  still overstate ("a history of structuring"). It is a draft, read by the analyst before any
+  decision — which is the design, not a workaround. CPU-only, a note takes about a minute.
+- **Runs are threads in copilot-service.** A restart interrupts them; they are marked FAILED at
+  start-up rather than left RUNNING, and can be run again from the console.

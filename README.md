@@ -141,6 +141,10 @@ curl -X POST http://localhost:8082/api/transactions      -H "Content-Type: appli
 | `GET :8082/api/customers/{id}/transactions` | A customer's recent transactions |
 | `POST :8082/api/simulations` | Demo traffic with planted typologies |
 | `GET :8083/api/alerts` | The open queue, most serious first, each alert with the findings that raised it |
+| `POST :8081/api/investigations` | Start the investigation agent on an alert (`{"alertId": …}`); returns at once, the agent runs in the background |
+| `GET :8081/api/investigations/{id}` | The case: execution trace, drafted note, decisions |
+| `POST :8081/api/investigations/{id}/decision` | Analyst: `ESCALATE` or `CLOSE` |
+| `POST :8081/api/investigations/{id}/sign-off` | Senior approver (a different person): `APPROVE` or `RETURN` |
 
 Detection is three rules — cash at or above EUR 10,000, **structuring** (three or more cash
 deposits just under that within 24 hours), and any payment involving a FATF high-risk
@@ -152,6 +156,23 @@ what the models achieve and where they fall short. The customers in `db/demo` ar
 The models are build output, not source: train them once with the notebooks in
 [`ml/`](ml/README.md) (about 15 minutes). Until then scoring-service starts with the rules
 alone and says so in its log.
+
+### Investigating an alert
+
+Expand an alert and press **Investigate**. The agent reads the alert, the customer's history,
+the transaction's peer segment and the policy that applies, then drafts a case note — each step
+shown in the execution trace as it runs. The analyst closes the case or escalates it; an
+escalation is reported only when a second person signs it off.
+
+The note is written by a small local model:
+
+```bash
+docker exec sentinel-ollama ollama pull qwen2.5:3b
+```
+
+Without it the investigation still completes, with a template note built from the same
+evidence. Set `SENTINEL_AGENT_PLANNER=LLM` to let the model choose the tools instead of the
+fixed plan. Why it works this way: [`docs/design-decisions.md`](docs/design-decisions.md) §5 and §15.
 
 ## The copilot API
 

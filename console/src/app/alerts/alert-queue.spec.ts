@@ -1,7 +1,11 @@
 import { HttpErrorResponse } from '@angular/common/http';
 import { TestBed } from '@angular/core/testing';
+import { Router, provideRouter } from '@angular/router';
 import { of, throwError } from 'rxjs';
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
+
+import { Investigation } from '../investigations/investigation.models';
+import { InvestigationsService } from '../investigations/investigations.service';
 
 import { Alert } from './alert.models';
 import { AlertQueue } from './alert-queue';
@@ -29,10 +33,14 @@ const STRUCTURING: Alert = {
   }],
 };
 
-function render(queue: AlertsService['queue']) {
+function render(queue: AlertsService['queue'], investigations: Partial<InvestigationsService> = {}) {
   TestBed.configureTestingModule({
     imports: [AlertQueue],
-    providers: [{ provide: AlertsService, useValue: { queue, simulate: () => of() } }],
+    providers: [
+      provideRouter([]),
+      { provide: AlertsService, useValue: { queue, simulate: () => of() } },
+      { provide: InvestigationsService, useValue: investigations },
+    ],
   });
   const fixture = TestBed.createComponent(AlertQueue);
   fixture.detectChanges();
@@ -68,5 +76,33 @@ describe('AlertQueue', () => {
 
     expect(host.querySelector('.error')?.textContent).toContain('scoring-service is not reachable');
     expect(host.querySelector('.empty')?.textContent).not.toContain('No open alerts');
+  });
+
+  it('asks scoring-service for the tab that is selected', () => {
+    const queue = vi.fn(() => of([STRUCTURING]));
+    const fixture = render(queue);
+    const host: HTMLElement = fixture.nativeElement;
+
+    const tabs = Array.from(host.querySelectorAll<HTMLButtonElement>('.tab'));
+    expect(tabs.map(t => t.textContent?.trim().replace(/\s+\d+$/, ''))).toEqual(['Open', 'In review', 'Escalated', 'Closed']);
+
+    tabs[1].click();
+    fixture.detectChanges();
+
+    expect(queue).toHaveBeenLastCalledWith('IN_REVIEW');
+  });
+
+  it('starts the agent on an alert and opens its investigation', () => {
+    const start = vi.fn((_alertId: string) => of({ id: 'inv-1' } as Investigation));
+    const fixture = render(() => of([STRUCTURING]), { start });
+    const navigate = vi.spyOn(TestBed.inject(Router), 'navigate').mockResolvedValue(true);
+    const host: HTMLElement = fixture.nativeElement;
+
+    (host.querySelector('tr.row') as HTMLElement).click();
+    fixture.detectChanges();
+    (host.querySelector('.investigate') as HTMLButtonElement).click();
+
+    expect(start).toHaveBeenCalledWith('a-1');
+    expect(navigate).toHaveBeenCalledWith(['/investigations', 'inv-1']);
   });
 });
