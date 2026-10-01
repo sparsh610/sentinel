@@ -31,6 +31,18 @@ class CopilotApplicationTests {
     @MockitoBean
     private DocumentRepository documentRepository;
 
+    @MockitoBean
+    private com.sparsh.sentinel.copilot.agent.InvestigationRepository investigationRepository;
+
+    @MockitoBean
+    private com.sparsh.sentinel.copilot.agent.InvestigationStepRepository investigationStepRepository;
+
+    @MockitoBean
+    private org.springframework.transaction.PlatformTransactionManager transactionManager;
+
+    @Autowired
+    private com.sparsh.sentinel.copilot.agent.InvestigationService investigationService;
+
     @Autowired
     private DocumentIngestionService ingestionService;
 
@@ -41,5 +53,6 @@ class CopilotApplicationTests {
     void contextLoads() {
         assertThat(ingestionService).isNotNull();
         assertThat(chatService).isNotNull();
+        assertThat(investigationService).isNotNull();
     }
 }

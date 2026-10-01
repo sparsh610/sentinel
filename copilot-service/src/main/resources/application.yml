@@ -48,6 +48,9 @@ spring:
           # Low temperature on purpose: a compliance answer should be reproducible, and
           # creative phrasing is a liability when the answer cites a regulation.
           temperature: 0.1
+          # Unload a model a minute after its last use instead of Ollama's five. On a laptop the
+          # 2 GB the agent's model holds matters more than reloading it in a few seconds.
+          keep-alive: 1m
       embedding:
         options:
           model: ${SENTINEL_LLM_EMBEDDING_MODEL:nomic-embed-text}
@@ -74,6 +77,20 @@ sentinel:
     # Below this cosine similarity a chunk is noise. Answering from noise is how a RAG system
     # produces a confident citation to an irrelevant paragraph.
     similarity-threshold: 0.55
+
+    # The investigation agent (docs/design-decisions.md §5 and §15).
+    agent:
+      # FIXED: the evidence tools run in a set order. LLM: the local model chooses them, under
+      # the same step limit and trace. Either way the agent only drafts; people decide.
+      planner: ${SENTINEL_AGENT_PLANNER:FIXED}
+      # Every tool call counts, the case note included.
+      max-steps: 6
+      # Local only - the prompt carries customer data from here on. Small enough to run beside
+      # the rest of the stack:  docker exec sentinel-ollama ollama pull qwen2.5:3b
+      model: ${SENTINEL_AGENT_MODEL:qwen2.5:3b}
+      scoring-url: ${SENTINEL_SCORING_URL:http://localhost:8083}
+      ingest-url: ${SENTINEL_INGEST_URL:http://localhost:8082}
+      history-limit: 20
 
 server:
   port: 8081

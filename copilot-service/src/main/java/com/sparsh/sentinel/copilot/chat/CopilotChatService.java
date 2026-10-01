@@ -103,7 +103,8 @@ public class CopilotChatService {
     public record Stream(List<Citation> citations, Flux<String> tokens, boolean grounded) {
     }
 
-    private List<Citation> retrieve(String question) {
+    /** Policy chunks that clear the similarity threshold, best first - also the agent's policyLookup tool. */
+    public List<Citation> retrieve(String question) {
         SearchRequest request = SearchRequest.builder()
                 .query(question)
                 .topK(properties.topK())

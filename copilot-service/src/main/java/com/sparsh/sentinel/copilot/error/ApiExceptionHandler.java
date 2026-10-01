@@ -1,5 +1,6 @@
 package com.sparsh.sentinel.copilot.error;
 
+import com.sparsh.sentinel.copilot.agent.client.ServiceUnavailableException;
 import com.sparsh.sentinel.copilot.document.DocumentIngestionService;
 import com.sparsh.sentinel.copilot.document.DuplicateDocumentException;
 import org.slf4j.Logger;
@@ -54,6 +55,34 @@ public class ApiExceptionHandler {
         ProblemDetail problem = ProblemDetail.forStatusAndDetail(
                 HttpStatus.BAD_REQUEST, e.getMessage());
         problem.setTitle("Invalid request");
+        return problem;
+    }
+
+    /** A decision the case's lifecycle does not allow - deciding twice, or signing off your own escalation. */
+    @ExceptionHandler(IllegalStateException.class)
+    ProblemDetail onConflict(IllegalStateException e) {
+        ProblemDetail problem = ProblemDetail.forStatusAndDetail(HttpStatus.CONFLICT, e.getMessage());
+        problem.setTitle("Not allowed in the case's current state");
+        problem.setType(URI.create("urn:sentinel:investigation-conflict"));
+        return problem;
+    }
+
+    @ExceptionHandler(ServiceUnavailableException.class)
+    ProblemDetail onServiceUnavailable(ServiceUnavailableException e) {
+        log.warn("{} unreachable: {}", e.getService(), e.getCause() == null ? "" : e.getCause().getMessage());
+        ProblemDetail problem = ProblemDetail.forStatusAndDetail(HttpStatus.SERVICE_UNAVAILABLE,
+                e.getService() + " is not reachable. Is it running?");
+        problem.setTitle("Service unavailable");
+        problem.setType(URI.create("urn:sentinel:service-unavailable"));
+        return problem;
+    }
+
+    /** Another Sentinel service refused a call, e.g. a status move its lifecycle does not allow. */
+    @ExceptionHandler(org.springframework.web.client.RestClientResponseException.class)
+    ProblemDetail onDownstreamRefusal(org.springframework.web.client.RestClientResponseException e) {
+        ProblemDetail problem = ProblemDetail.forStatusAndDetail(HttpStatus.BAD_GATEWAY,
+                "A Sentinel service refused the call: " + e.getStatusCode() + " " + e.getResponseBodyAsString());
+        problem.setTitle("Downstream service refused");
         return problem;
     }
 

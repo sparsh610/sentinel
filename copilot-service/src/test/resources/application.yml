@@ -30,3 +30,10 @@ sentinel:
     min-chunk-size-chars: 350
     top-k: 6
     similarity-threshold: 0.55
+    agent:
+      planner: FIXED
+      max-steps: 6
+      model: qwen2.5:3b
+      scoring-url: http://localhost:8083
+      ingest-url: http://localhost:8082
+      history-limit: 20
