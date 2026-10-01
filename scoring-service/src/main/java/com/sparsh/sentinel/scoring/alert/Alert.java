@@ -29,7 +29,22 @@ import java.util.UUID;
 @Table(name = "alert", schema = "sentinel")
 public class Alert {
 
-    public enum Status { OPEN, IN_REVIEW, ESCALATED, CLOSED }
+    /**
+     * OPEN until an investigation starts, IN_REVIEW while it runs and waits for a decision, then
+     * ESCALATED (reported) or CLOSED (no further action). A decided alert stays decided:
+     * reopening one would let a reported case quietly leave the record.
+     */
+    public enum Status {
+        OPEN, IN_REVIEW, ESCALATED, CLOSED;
+
+        boolean canMoveTo(Status next) {
+            return switch (this) {
+                case OPEN -> next == IN_REVIEW;
+                case IN_REVIEW -> next == ESCALATED || next == CLOSED;
+                case ESCALATED, CLOSED -> false;
+            };
+        }
+    }
 
     @Id
     private UUID id;
@@ -107,6 +122,22 @@ public class Alert {
         alert.score = findings.stream().map(Finding::score).max(Comparator.naturalOrder()).orElseThrow();
         findings.forEach(f -> alert.findings.add(new AlertFinding(alert, f)));
         return alert;
+    }
+
+    /**
+     * Moves the alert along its lifecycle. Moving to the status it already has is a no-op, so a
+     * caller retrying after a timeout does not fail on its own earlier success.
+     *
+     * @throws IllegalStateException for a move the lifecycle does not allow
+     */
+    public void moveTo(Status next) {
+        if (next == status) {
+            return;
+        }
+        if (!status.canMoveTo(next)) {
+            throw new IllegalStateException("Alert " + id + " is " + status + " and cannot become " + next);
+        }
+        status = next;
     }
 
     public UUID getId() {
