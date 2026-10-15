@@ -52,6 +52,7 @@ public class InvestigationRunner {
         Investigation investigation = investigations.findById(investigationId).orElseThrow();
         StepRecorder recorder = new StepRecorder(investigation, properties.maxSteps(), steps, json, clock);
         Evidence evidence = new Evidence();
+        evidence.clearance = investigation.getClearance();
         try {
             evidence.alert = recorder.run(InvestigationTools.RISK_SCORE,
                             Map.of("alertId", investigation.getAlertId(), "requestedBy", FixedPlanner.BY_PLAN),

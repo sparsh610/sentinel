@@ -6,6 +6,7 @@ import com.sparsh.sentinel.copilot.agent.client.ScoringClient.AlertSnapshot;
 import com.sparsh.sentinel.copilot.agent.client.ScoringClient.PeerSegment;
 import com.sparsh.sentinel.copilot.chat.Citation;
 import com.sparsh.sentinel.copilot.chat.CopilotChatService;
+import com.sparsh.sentinel.copilot.document.Classification;
 import org.springframework.stereotype.Component;
 
 import java.math.BigDecimal;
@@ -87,9 +88,12 @@ public class InvestigationTools {
         return scoring.peerSegment(transactionId);
     }
 
-    /** The policy clauses that match the question, best first. */
-    public List<Citation> policyLookup(String question) {
-        return retrieval.retrieve(question).stream().limit(POLICY_EXCERPTS).toList();
+    /**
+     * The policy clauses that match the question, best first, from the documents the person the
+     * investigation is for may see.
+     */
+    public List<Citation> policyLookup(String question, Set<Classification> clearance) {
+        return retrieval.retrieve(question, clearance).stream().limit(POLICY_EXCERPTS).toList();
     }
 
     /**

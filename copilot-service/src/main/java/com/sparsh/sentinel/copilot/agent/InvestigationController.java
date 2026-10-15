@@ -1,7 +1,6 @@
 package com.sparsh.sentinel.copilot.agent;
 
 import jakarta.validation.Valid;
-import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Size;
 import org.springframework.http.HttpStatus;
@@ -21,8 +20,8 @@ import java.util.UUID;
  * Investigations of alerts. Starting one returns 202 at once - the agent runs in the background
  * and the console polls {@code GET /{id}} to watch the trace grow.
  *
- * <p>Who decides is taken from the request for now. Week 7 replaces it with the authenticated
- * user and checks the SENIOR_APPROVER role on sign-off; the four-eyes rule already holds.
+ * <p>Who decides is the person on the Keycloak token: the request body says what they decided,
+ * not who they are. Sign-off needs the SENIOR_APPROVER role, and four eyes is checked by name.
  */
 @RestController
 @RequestMapping("/api/investigations")
@@ -53,20 +52,19 @@ public class InvestigationController {
     /** The analyst: ESCALATE (for sign-off) or CLOSE. */
     @PostMapping("/{id}/decision")
     public InvestigationView decide(@PathVariable UUID id, @RequestBody @Valid DecisionRequest request) {
-        return service.analystDecides(id, request.action(), request.actor(), request.comment());
+        return service.analystDecides(id, request.action(), request.comment());
     }
 
     /** The senior approver: APPROVE (report it) or RETURN (back to the analyst). */
     @PostMapping("/{id}/sign-off")
     public InvestigationView signOff(@PathVariable UUID id, @RequestBody @Valid DecisionRequest request) {
-        return service.approverDecides(id, request.action(), request.actor(), request.comment());
+        return service.approverDecides(id, request.action(), request.comment());
     }
 
     public record StartRequest(@NotNull UUID alertId) {
     }
 
     public record DecisionRequest(@NotNull InvestigationDecision.Action action,
-                                  @NotBlank @Size(max = 64) String actor,
                                   @Size(max = 2000) String comment) {
     }
 }

@@ -1,9 +1,11 @@
 package com.sparsh.sentinel.copilot.agent;
 
+import com.sparsh.sentinel.copilot.security.CurrentUser;
 import org.junit.jupiter.api.Test;
 
 import java.math.BigDecimal;
 import java.time.Instant;
+import java.util.Set;
 import java.util.UUID;
 
 import static com.sparsh.sentinel.copilot.agent.InvestigationDecision.Action.APPROVE;
@@ -19,7 +21,8 @@ class InvestigationLifecycleTest {
 
     static Investigation drafted() {
         Investigation investigation = Investigation.start(UUID.randomUUID(), UUID.randomUUID(), "C-10001",
-                new BigDecimal("9500"), "EUR", AgentProperties.Planner.FIXED, NOW);
+                new BigDecimal("9500"), "EUR", AgentProperties.Planner.FIXED, "alex.analyst",
+                CurrentUser.clearanceFor(Set.of(CurrentUser.ANALYST)), NOW);
         investigation.drafted("note", Investigation.NoteSource.TEMPLATE, NOW);
         return investigation;
     }
@@ -27,7 +30,8 @@ class InvestigationLifecycleTest {
     @Test
     void theAgentCanOnlyDraftPeopleDecide() {
         Investigation investigation = Investigation.start(UUID.randomUUID(), UUID.randomUUID(), "C-10001",
-                new BigDecimal("9500"), "EUR", AgentProperties.Planner.FIXED, NOW);
+                new BigDecimal("9500"), "EUR", AgentProperties.Planner.FIXED, "alex.analyst",
+                CurrentUser.clearanceFor(Set.of(CurrentUser.ANALYST)), NOW);
 
         assertThatThrownBy(() -> investigation.analystDecides(ESCALATE, "ana", null, NOW))
                 .isInstanceOf(IllegalStateException.class);

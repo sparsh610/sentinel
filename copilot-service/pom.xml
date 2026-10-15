@@ -63,6 +63,14 @@
             <artifactId>spring-boot-starter-validation</artifactId>
         </dependency>
 
+        <!-- copilot-service calls scoring-service and tx-ingest as itself - a Keycloak service
+             account, client credentials - because the agent runs on a background thread, long
+             after the analyst's request (and token) that started it. -->
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-oauth2-client</artifactId>
+        </dependency>
+
         <!-- Publishes the investigation tools as an MCP server (Streamable HTTP at /mcp), so an
              external client - Claude Code, Codex CLI - can investigate with them. Off unless the
              "mcp" profile is active: see application-mcp.yml. -->

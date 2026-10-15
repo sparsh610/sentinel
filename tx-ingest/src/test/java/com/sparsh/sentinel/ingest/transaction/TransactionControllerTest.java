@@ -6,7 +6,12 @@ import com.sparsh.sentinel.ingest.transaction.TransactionIngestService.IngestRes
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.WebMvcTest;
+import org.springframework.context.annotation.Import;
+import com.sparsh.sentinel.ingest.config.SecurityConfig;
 import org.springframework.http.MediaType;
+import org.springframework.security.core.authority.SimpleGrantedAuthority;
+import org.springframework.security.oauth2.jwt.JwtDecoder;
+import org.springframework.test.web.servlet.request.MockHttpServletRequestBuilder;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
 
@@ -17,11 +22,13 @@ import java.util.UUID;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
+import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.jwt;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 @WebMvcTest(TransactionController.class)
+@Import(SecurityConfig.class)
 class TransactionControllerTest {
 
     private static final String VALID = """
@@ -35,6 +42,15 @@ class TransactionControllerTest {
     @MockitoBean
     private TransactionIngestService ingestService;
 
+    @MockitoBean
+    private JwtDecoder jwtDecoder;
+
+    /** A source system's feed: the INGEST role, from its service account. */
+    private static MockHttpServletRequestBuilder book(String body) {
+        return post("/api/transactions").contentType(MediaType.APPLICATION_JSON).content(body)
+                .with(jwt().authorities(new SimpleGrantedAuthority("ROLE_INGEST")));
+    }
+
     @Test
     void aNewTransactionIsCreatedAndAReplayIsOk() throws Exception {
         TransactionView view = new TransactionView(UUID.randomUUID(), "REF-1", "C-10001",
@@ -42,12 +58,12 @@ class TransactionControllerTest {
                 Instant.parse("2026-09-23T09:00:00Z"), Instant.parse("2026-09-23T09:00:01Z"));
 
         when(ingestService.ingest(any())).thenReturn(new IngestResult(view, true));
-        mvc.perform(post("/api/transactions").contentType(MediaType.APPLICATION_JSON).content(VALID))
+        mvc.perform(book(VALID))
                 .andExpect(status().isCreated())
                 .andExpect(jsonPath("$.externalRef").value("REF-1"));
 
         when(ingestService.ingest(any())).thenReturn(new IngestResult(view, false));
-        mvc.perform(post("/api/transactions").contentType(MediaType.APPLICATION_JSON).content(VALID))
+        mvc.perform(book(VALID))
                 .andExpect(status().isOk());
     }
 
@@ -58,10 +74,21 @@ class TransactionControllerTest {
                  "amount":-5,"currency":"JPY","bookedAt":"2026-09-23T09:00:00Z"}
                 """;
 
-        mvc.perform(post("/api/transactions").contentType(MediaType.APPLICATION_JSON).content(invalid))
+        mvc.perform(book(invalid))
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.errors.amount").exists())
                 .andExpect(jsonPath("$.errors.currency").value("only EUR is supported until FX conversion exists"));
+
+        verifyNoInteractions(ingestService);
+    }
+
+    @Test
+    void onlyASourceSystemBooksTransactions() throws Exception {
+        mvc.perform(post("/api/transactions").contentType(MediaType.APPLICATION_JSON).content(VALID))
+                .andExpect(status().isUnauthorized());
+        mvc.perform(post("/api/transactions").contentType(MediaType.APPLICATION_JSON).content(VALID)
+                        .with(jwt().authorities(new SimpleGrantedAuthority("ROLE_ANALYST"))))
+                .andExpect(status().isForbidden());
 
         verifyNoInteractions(ingestService);
     }

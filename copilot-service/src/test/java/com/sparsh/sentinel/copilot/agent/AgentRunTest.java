@@ -6,6 +6,8 @@ import com.sparsh.sentinel.copilot.agent.client.ScoringClient.AlertSnapshot;
 import com.sparsh.sentinel.copilot.agent.client.ScoringClient.PeerSegment;
 import com.sparsh.sentinel.copilot.agent.client.ServiceUnavailableException;
 import com.sparsh.sentinel.copilot.chat.Citation;
+import com.sparsh.sentinel.copilot.document.Classification;
+import com.sparsh.sentinel.copilot.security.CurrentUser;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -31,6 +33,7 @@ import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.atLeastOnce;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
@@ -67,14 +70,15 @@ class AgentRunTest {
         when(tools.customerHistory("C-20001")).thenReturn(new Evidence.History(3, new BigDecimal("29400"),
                 BigDecimal.ZERO, 3, 0, Set.of(), List.of()));
         when(tools.peerSegment(TX)).thenReturn(new PeerSegment(TX, 0, -0.02, -0.12, false));
-        when(tools.policyLookup(any())).thenReturn(List.of(
+        when(tools.policyLookup(any(), any())).thenReturn(List.of(
                 new Citation(1, UUID.randomUUID(), "Internal AML Policy", 1, 0.8, "AML-04.2 Where three or more...")));
         when(noteWriter.write(any())).thenReturn(new CaseNoteWriter.CaseNote("Summary: ...", Investigation.NoteSource.MODEL));
         when(noteWriter.modelIsLocal()).thenReturn(true);
     }
 
     private void start(AgentProperties.Planner planner) {
-        investigation = Investigation.start(ALERT, TX, "C-20001", new BigDecimal("9800"), "EUR", planner, NOW);
+        investigation = Investigation.start(ALERT, TX, "C-20001", new BigDecimal("9800"), "EUR", planner,
+                "alex.analyst", CurrentUser.clearanceFor(Set.of(CurrentUser.ANALYST)), NOW);
         when(investigations.findById(investigation.getId())).thenReturn(Optional.of(investigation));
     }
 
@@ -104,6 +108,16 @@ class AgentRunTest {
         assertThat(recordedSteps()).allMatch(s -> s.getStatus() == InvestigationStep.Status.OK);
         assertThat(investigation.getStatus()).isEqualTo(Investigation.Status.DRAFTED);
         assertThat(investigation.getNoteSource()).isEqualTo(Investigation.NoteSource.MODEL);
+    }
+
+    /** The agent has no clearance of its own: its policy lookup sees what the analyst who started it may. */
+    @Test
+    void thePolicyLookupIsHeldToTheStartersClearance() {
+        start(AgentProperties.Planner.FIXED);
+
+        runner(6).run(investigation.getId());
+
+        verify(tools).policyLookup(any(), eq(Set.of(Classification.PUBLIC, Classification.INTERNAL)));
     }
 
     @Test

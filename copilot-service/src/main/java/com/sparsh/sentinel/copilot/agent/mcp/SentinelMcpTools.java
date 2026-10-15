@@ -8,6 +8,7 @@ import com.sparsh.sentinel.copilot.agent.client.ScoringClient;
 import com.sparsh.sentinel.copilot.agent.client.ScoringClient.AlertSnapshot;
 import com.sparsh.sentinel.copilot.agent.client.ScoringClient.PeerSegment;
 import com.sparsh.sentinel.copilot.chat.Citation;
+import com.sparsh.sentinel.copilot.security.CurrentUser;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.ai.tool.annotation.Tool;
@@ -87,7 +88,7 @@ public class SentinelMcpTools {
     public List<Citation> policyLookup(
             @ToolParam(description = "What to look up, e.g. 'structuring reporting threshold'") String question) {
         log.info("MCP policyLookup({})", question);
-        return tools.policyLookup(question);
+        return tools.policyLookup(question, CurrentUser.get().clearance());
     }
 
     @Tool(name = "draftCaseNote", resultConverter = IsoDateResultConverter.class, description = """

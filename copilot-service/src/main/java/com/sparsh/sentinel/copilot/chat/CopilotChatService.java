@@ -1,19 +1,23 @@
 package com.sparsh.sentinel.copilot.chat;
 
 import com.sparsh.sentinel.copilot.config.CopilotProperties;
+import com.sparsh.sentinel.copilot.document.Classification;
 import com.sparsh.sentinel.copilot.document.DocumentIngestionService;
+import com.sparsh.sentinel.copilot.security.CurrentUser;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.ai.chat.client.ChatClient;
 import org.springframework.ai.document.Document;
 import org.springframework.ai.vectorstore.SearchRequest;
 import org.springframework.ai.vectorstore.VectorStore;
+import org.springframework.ai.vectorstore.filter.FilterExpressionBuilder;
 import org.springframework.stereotype.Service;
 import reactor.core.publisher.Flux;
 
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.UUID;
 
 /**
@@ -62,7 +66,7 @@ public class CopilotChatService {
     }
 
     public AnswerResponse ask(String question) {
-        List<Citation> citations = retrieve(question);
+        List<Citation> citations = retrieve(question, CurrentUser.get().clearance());
 
         if (citations.isEmpty()) {
             return new AnswerResponse(
@@ -84,7 +88,7 @@ public class CopilotChatService {
      * like the model is inventing as it goes.
      */
     public Stream stream(String question) {
-        List<Citation> citations = retrieve(question);
+        List<Citation> citations = retrieve(question, CurrentUser.get().clearance());
 
         if (citations.isEmpty()) {
             return new Stream(List.of(), Flux.just("I don't have a source for that."), false);
@@ -103,12 +107,28 @@ public class CopilotChatService {
     public record Stream(List<Citation> citations, Flux<String> tokens, boolean grounded) {
     }
 
-    /** Policy chunks that clear the similarity threshold, best first - also the agent's policyLookup tool. */
-    public List<Citation> retrieve(String question) {
+    /**
+     * Policy chunks that clear the similarity threshold, best first - also the agent's
+     * policyLookup tool.
+     *
+     * <p>The document ACL is applied here, inside the vector search, as a filter on each chunk's
+     * classification - not to the results afterwards. A chunk the caller may not see is never
+     * returned, so it cannot be quoted, cited, or passed to a model, whichever entry point asked.
+     *
+     * @param clearance the classifications the person asking may see
+     */
+    public List<Citation> retrieve(String question, Set<Classification> clearance) {
+        if (clearance.isEmpty()) {
+            return List.of();
+        }
         SearchRequest request = SearchRequest.builder()
                 .query(question)
                 .topK(properties.topK())
                 .similarityThreshold(properties.similarityThreshold())
+                .filterExpression(new FilterExpressionBuilder()
+                        .in(DocumentIngestionService.META_CLASSIFICATION,
+                                clearance.stream().map(Enum::name).sorted().toArray())
+                        .build())
                 .build();
 
         List<Document> hits = vectorStore.similaritySearch(request);

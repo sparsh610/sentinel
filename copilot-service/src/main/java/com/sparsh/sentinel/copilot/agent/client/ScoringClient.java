@@ -1,6 +1,7 @@
 package com.sparsh.sentinel.copilot.agent.client;
 
 import com.sparsh.sentinel.copilot.agent.AgentProperties;
+import org.springframework.security.oauth2.client.web.client.OAuth2ClientHttpRequestInterceptor;
 import org.springframework.stereotype.Component;
 import org.springframework.web.client.ResourceAccessException;
 import org.springframework.web.client.RestClient;
@@ -20,8 +21,10 @@ public class ScoringClient {
 
     private final RestClient http;
 
-    public ScoringClient(RestClient.Builder builder, AgentProperties properties) {
-        this.http = builder.baseUrl(properties.scoringUrl()).build();
+    /** @param serviceToken adds copilot-service's own token - see SecurityConfig. */
+    public ScoringClient(RestClient.Builder builder, AgentProperties properties,
+                         OAuth2ClientHttpRequestInterceptor serviceToken) {
+        this.http = builder.baseUrl(properties.scoringUrl()).requestInterceptor(serviceToken).build();
     }
 
     public AlertSnapshot alert(UUID alertId) {

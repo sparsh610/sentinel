@@ -50,7 +50,7 @@ public class FixedPlanner {
 
     void policyLookup(Evidence evidence, StepRecorder steps, String requestedBy, String question) {
         steps.run(POLICY_LOOKUP, Map.of("question", question, "requestedBy", requestedBy),
-                        () -> tools.policyLookup(question))
+                        () -> tools.policyLookup(question, evidence.clearance))
                 .filter(found -> !found.isEmpty())
                 .ifPresentOrElse(evidence::addPolicy,
                         () -> evidence.gaps.add("No policy clause matched \"" + question + "\"."));

@@ -10,11 +10,17 @@ import jakarta.persistence.OneToMany;
 import jakarta.persistence.OrderBy;
 import jakarta.persistence.Table;
 
+import com.sparsh.sentinel.copilot.document.Classification;
+
 import java.math.BigDecimal;
 import java.time.Instant;
 import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.EnumSet;
 import java.util.List;
+import java.util.Set;
 import java.util.UUID;
+import java.util.stream.Collectors;
 
 /**
  * The agent's work on one alert, and where the people deciding it have got to.
@@ -73,6 +79,14 @@ public class Investigation {
     @Column(name = "finished_at")
     private Instant finishedAt;
 
+    /** Who pressed Investigate - or asked for the draft over MCP. Null on runs from before week 7. */
+    @Column(name = "started_by", length = 64)
+    private String startedBy;
+
+    /** The policy classifications the starter may see, e.g. "INTERNAL,PUBLIC". */
+    @Column(nullable = false, length = 64)
+    private String clearance;
+
     @OneToMany(mappedBy = "investigation")
     @OrderBy("stepNo")
     private List<InvestigationStep> steps = new ArrayList<>();
@@ -86,7 +100,8 @@ public class Investigation {
     }
 
     public static Investigation start(UUID alertId, UUID transactionId, String customerId, BigDecimal amount,
-                                      String currency, AgentProperties.Planner planner, Instant now) {
+                                      String currency, AgentProperties.Planner planner, String startedBy,
+                                      Set<Classification> clearance, Instant now) {
         Investigation investigation = new Investigation();
         investigation.id = UUID.randomUUID();
         investigation.alertId = alertId;
@@ -97,6 +112,8 @@ public class Investigation {
         investigation.planner = planner;
         investigation.status = Status.RUNNING;
         investigation.startedAt = now;
+        investigation.startedBy = startedBy;
+        investigation.clearance = clearance.stream().map(Enum::name).sorted().collect(Collectors.joining(","));
         return investigation;
     }
 
@@ -211,6 +228,18 @@ public class Investigation {
 
     public Instant getFinishedAt() {
         return finishedAt;
+    }
+
+    public String getStartedBy() {
+        return startedBy;
+    }
+
+    /** What the agent's policy lookup may return for this run: the starter's document ACL. */
+    public Set<Classification> getClearance() {
+        Set<Classification> allowed = EnumSet.noneOf(Classification.class);
+        Arrays.stream(clearance.split(",")).map(String::strip).filter(c -> !c.isEmpty())
+                .map(Classification::valueOf).forEach(allowed::add);
+        return allowed;
     }
 
     public List<InvestigationStep> getSteps() {

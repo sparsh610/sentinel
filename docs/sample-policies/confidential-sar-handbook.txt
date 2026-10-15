@@ -1,0 +1,28 @@
+SYNTHETIC CONFIDENTIAL PROCEDURE - NOT A REAL BANK DOCUMENT
+Sentinel test corpus. Written to exercise the document ACL: classified CONFIDENTIAL, so only a
+senior approver may retrieve it. Do not treat as legal guidance.
+
+SAR-01  Handling a Suspicious Activity Report After Sign-off
+
+SAR-01.1  Once a senior approver has signed off a suspicious activity report, it shall be filed
+with the Financial Intelligence Unit within one business day of the sign-off.
+
+SAR-01.2  The customer shall not be told, directly or by implication, that a report has been
+filed or is being considered. Account restrictions applied after a report shall be explained to
+the customer only in the terms agreed with the Money Laundering Reporting Officer.
+
+SAR-02  Law-Enforcement Requests
+
+SAR-02.1  A production order or a request from law enforcement concerning a customer under
+investigation shall be routed to the Money Laundering Reporting Officer and shall not be
+recorded in the case note an analyst can see.
+
+SAR-02.2  Where law enforcement asks the bank to keep an account open, the request shall be
+confirmed in writing before any monitoring threshold for that customer is changed.
+
+SAR-03  Internal Watch List
+
+SAR-03.1  Customers on the internal watch list shall have every alert escalated for senior
+review, whatever the recommendation in the case note.
+
+SAR-03.2  The watch list itself is CONFIDENTIAL and shall be shown to senior approvers only.

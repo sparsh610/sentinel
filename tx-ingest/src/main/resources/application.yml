@@ -2,6 +2,20 @@ spring:
   application:
     name: tx-ingest
 
+  # Every request carries a Keycloak access token (week 7). The token must be issued by the
+  # sentinel realm, for the sentinel-api audience; its "roles" claim becomes ROLE_* authorities
+  # and preferred_username the principal's name. The signing keys are fetched on first use, so
+  # the service starts - and its tests run - without Keycloak up.
+  security:
+    oauth2:
+      resourceserver:
+        jwt:
+          issuer-uri: ${SENTINEL_ISSUER_URI:http://localhost:8080/realms/sentinel}
+          audiences: sentinel-api
+          authorities-claim-name: roles
+          authority-prefix: ROLE_
+          principal-claim-name: preferred_username
+
   datasource:
     url: ${SENTINEL_DB_URL:jdbc:postgresql://localhost:5432/sentinel}
     username: ${SENTINEL_DB_USER:sentinel}

@@ -1,5 +1,6 @@
 package com.sparsh.sentinel.copilot.document;
 
+import com.sparsh.sentinel.copilot.security.CurrentUser;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -55,6 +56,6 @@ public class DocumentController {
 
     @GetMapping
     public List<DocumentSummary> list() {
-        return ingestionService.list();
+        return ingestionService.list(CurrentUser.get().clearance());
     }
 }

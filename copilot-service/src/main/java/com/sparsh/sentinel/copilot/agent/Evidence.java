@@ -3,9 +3,11 @@ package com.sparsh.sentinel.copilot.agent;
 import com.sparsh.sentinel.copilot.agent.client.ScoringClient.AlertSnapshot;
 import com.sparsh.sentinel.copilot.agent.client.ScoringClient.PeerSegment;
 import com.sparsh.sentinel.copilot.chat.Citation;
+import com.sparsh.sentinel.copilot.document.Classification;
 
 import java.math.BigDecimal;
 import java.util.ArrayList;
+import java.util.EnumSet;
 import java.util.List;
 import java.util.Set;
 
@@ -21,6 +23,8 @@ public final class Evidence {
     final List<Citation> policy = new ArrayList<>();
     /** What could not be established, and why - the note has to say so rather than guess. */
     final List<String> gaps = new ArrayList<>();
+    /** The policy the person this run is for may see; the policy lookup is held to it. */
+    Set<Classification> clearance = EnumSet.of(Classification.PUBLIC);
 
     /**
      * @param recent the newest few, for the note; the totals cover everything read.

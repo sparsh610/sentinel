@@ -2,6 +2,33 @@ spring:
   application:
     name: copilot-service
 
+  # Every request carries a Keycloak access token (week 7). The token must be issued by the
+  # sentinel realm, for the sentinel-api audience; its "roles" claim becomes ROLE_* authorities
+  # and preferred_username the principal's name. The signing keys are fetched on first use, so
+  # the service starts - and its tests run - without Keycloak up.
+  security:
+    oauth2:
+      resourceserver:
+        jwt:
+          issuer-uri: ${SENTINEL_ISSUER_URI:http://localhost:8080/realms/sentinel}
+          audiences: sentinel-api
+          authorities-claim-name: roles
+          authority-prefix: ROLE_
+          principal-claim-name: preferred_username
+      # copilot-service's own identity for its calls to scoring-service and tx-ingest: the
+      # copilot-service service account (role SERVICE), client credentials. The token URI is
+      # given rather than discovered, so start-up does not depend on Keycloak being up.
+      client:
+        registration:
+          copilot:
+            provider: keycloak
+            client-id: ${SENTINEL_COPILOT_CLIENT_ID:copilot-service}
+            client-secret: ${SENTINEL_COPILOT_CLIENT_SECRET:copilot-service-secret}
+            authorization-grant-type: client_credentials
+        provider:
+          keycloak:
+            token-uri: ${SENTINEL_ISSUER_URI:http://localhost:8080/realms/sentinel}/protocol/openid-connect/token
+
   datasource:
     url: ${SENTINEL_DB_URL:jdbc:postgresql://localhost:5432/sentinel}
     username: ${SENTINEL_DB_USER:sentinel}

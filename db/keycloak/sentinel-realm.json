@@ -1,0 +1,167 @@
+{
+  "realm": "sentinel",
+  "displayName": "Sentinel",
+  "enabled": true,
+  "sslRequired": "none",
+  "registrationAllowed": false,
+  "loginWithEmailAllowed": false,
+  "accessTokenLifespan": 300,
+  "roles": {
+    "realm": [
+      { "name": "ANALYST", "description": "Investigates alerts; may close a case or escalate it for sign-off" },
+      { "name": "SENIOR_APPROVER", "description": "Signs off escalations; sees CONFIDENTIAL policy; uploads policy documents" },
+      { "name": "SERVICE", "description": "Service-to-service calls: copilot-service reading alerts and moving their status" },
+      { "name": "INGEST", "description": "Source systems booking transactions into tx-ingest" }
+    ]
+  },
+  "users": [
+    {
+      "username": "alex.analyst",
+      "firstName": "Alex",
+      "lastName": "Analyst",
+      "email": "alex.analyst@sentinel.example",
+      "emailVerified": true,
+      "enabled": true,
+      "credentials": [{ "type": "password", "value": "alex", "temporary": false }],
+      "realmRoles": ["ANALYST"]
+    },
+    {
+      "username": "bea.analyst",
+      "firstName": "Bea",
+      "lastName": "Analyst",
+      "email": "bea.analyst@sentinel.example",
+      "emailVerified": true,
+      "enabled": true,
+      "credentials": [{ "type": "password", "value": "bea", "temporary": false }],
+      "realmRoles": ["ANALYST"]
+    },
+    {
+      "username": "sam.senior",
+      "firstName": "Sam",
+      "lastName": "Senior",
+      "email": "sam.senior@sentinel.example",
+      "emailVerified": true,
+      "enabled": true,
+      "credentials": [{ "type": "password", "value": "sam", "temporary": false }],
+      "realmRoles": ["ANALYST", "SENIOR_APPROVER"]
+    },
+    {
+      "username": "service-account-copilot-service",
+      "enabled": true,
+      "serviceAccountClientId": "copilot-service",
+      "realmRoles": ["SERVICE"]
+    },
+    {
+      "username": "service-account-sentinel-feeder",
+      "enabled": true,
+      "serviceAccountClientId": "sentinel-feeder",
+      "realmRoles": ["INGEST"]
+    }
+  ],
+  "clients": [
+    {
+      "clientId": "sentinel-console",
+      "name": "Sentinel console",
+      "enabled": true,
+      "publicClient": true,
+      "standardFlowEnabled": true,
+      "directAccessGrantsEnabled": false,
+      "redirectUris": ["http://localhost:4200/*"],
+      "webOrigins": ["http://localhost:4200"],
+      "attributes": {
+        "pkce.code.challenge.method": "S256",
+        "post.logout.redirect.uris": "http://localhost:4200/*"
+      },
+      "protocolMappers": [
+        {
+          "name": "audience sentinel-api",
+          "protocol": "openid-connect",
+          "protocolMapper": "oidc-audience-mapper",
+          "config": { "included.custom.audience": "sentinel-api", "access.token.claim": "true", "id.token.claim": "false" }
+        },
+        {
+          "name": "realm roles as roles",
+          "protocol": "openid-connect",
+          "protocolMapper": "oidc-usermodel-realm-role-mapper",
+          "config": { "claim.name": "roles", "multivalued": "true", "jsonType.label": "String", "access.token.claim": "true", "id.token.claim": "false", "userinfo.token.claim": "false" }
+        }
+      ]
+    },
+    {
+      "clientId": "sentinel-cli",
+      "name": "Sentinel CLI and MCP clients",
+      "description": "Tokens for Claude Code / Codex CLI over MCP. Password grant: demo realm only.",
+      "enabled": true,
+      "publicClient": true,
+      "standardFlowEnabled": false,
+      "directAccessGrantsEnabled": true,
+      "attributes": {
+        "access.token.lifespan": "28800"
+      },
+      "protocolMappers": [
+        {
+          "name": "audience sentinel-api",
+          "protocol": "openid-connect",
+          "protocolMapper": "oidc-audience-mapper",
+          "config": { "included.custom.audience": "sentinel-api", "access.token.claim": "true", "id.token.claim": "false" }
+        },
+        {
+          "name": "realm roles as roles",
+          "protocol": "openid-connect",
+          "protocolMapper": "oidc-usermodel-realm-role-mapper",
+          "config": { "claim.name": "roles", "multivalued": "true", "jsonType.label": "String", "access.token.claim": "true", "id.token.claim": "false", "userinfo.token.claim": "false" }
+        }
+      ]
+    },
+    {
+      "clientId": "copilot-service",
+      "name": "copilot-service (service account)",
+      "enabled": true,
+      "publicClient": false,
+      "clientAuthenticatorType": "client-secret",
+      "secret": "copilot-service-secret",
+      "standardFlowEnabled": false,
+      "directAccessGrantsEnabled": false,
+      "serviceAccountsEnabled": true,
+      "protocolMappers": [
+        {
+          "name": "audience sentinel-api",
+          "protocol": "openid-connect",
+          "protocolMapper": "oidc-audience-mapper",
+          "config": { "included.custom.audience": "sentinel-api", "access.token.claim": "true", "id.token.claim": "false" }
+        },
+        {
+          "name": "realm roles as roles",
+          "protocol": "openid-connect",
+          "protocolMapper": "oidc-usermodel-realm-role-mapper",
+          "config": { "claim.name": "roles", "multivalued": "true", "jsonType.label": "String", "access.token.claim": "true", "id.token.claim": "false", "userinfo.token.claim": "false" }
+        }
+      ]
+    },
+    {
+      "clientId": "sentinel-feeder",
+      "name": "Source-system feed (service account)",
+      "enabled": true,
+      "publicClient": false,
+      "clientAuthenticatorType": "client-secret",
+      "secret": "sentinel-feeder-secret",
+      "standardFlowEnabled": false,
+      "directAccessGrantsEnabled": false,
+      "serviceAccountsEnabled": true,
+      "protocolMappers": [
+        {
+          "name": "audience sentinel-api",
+          "protocol": "openid-connect",
+          "protocolMapper": "oidc-audience-mapper",
+          "config": { "included.custom.audience": "sentinel-api", "access.token.claim": "true", "id.token.claim": "false" }
+        },
+        {
+          "name": "realm roles as roles",
+          "protocol": "openid-connect",
+          "protocolMapper": "oidc-usermodel-realm-role-mapper",
+          "config": { "claim.name": "roles", "multivalued": "true", "jsonType.label": "String", "access.token.claim": "true", "id.token.claim": "false", "userinfo.token.claim": "false" }
+        }
+      ]
+    }
+  ]
+}

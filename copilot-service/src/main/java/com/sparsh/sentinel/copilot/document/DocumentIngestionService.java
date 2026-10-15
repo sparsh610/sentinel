@@ -5,12 +5,14 @@ import org.slf4j.LoggerFactory;
 import org.springframework.ai.document.Document;
 import org.springframework.ai.transformer.splitter.TokenTextSplitter;
 import org.springframework.ai.vectorstore.VectorStore;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.Instant;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.UUID;
 
 /**
@@ -55,8 +57,12 @@ public class DocumentIngestionService {
      * checksum makes re-ingestion a no-op, and is the kind of thing a reconciliation job
      * handles properly later.
      *
+     * <p>Senior approvers only: whoever uploads a document decides its classification, and so
+     * who will be shown it.
+     *
      * @throws DuplicateDocumentException if these exact bytes were ingested before
      */
+    @PreAuthorize("hasRole('SENIOR_APPROVER')")
     @Transactional
     public DocumentSummary ingest(byte[] content,
                                   String filename,
@@ -114,9 +120,13 @@ public class DocumentIngestionService {
         return DocumentSummary.of(entity);
     }
 
+    /** The documents the caller may see - a CONFIDENTIAL title is not listed to an analyst either. */
     @Transactional(readOnly = true)
-    public List<DocumentSummary> list() {
-        return repository.findAll().stream().map(DocumentSummary::of).toList();
+    public List<DocumentSummary> list(Set<Classification> clearance) {
+        return repository.findAll().stream()
+                .filter(document -> clearance.contains(document.getClassification()))
+                .map(DocumentSummary::of)
+                .toList();
     }
 
     private static String sha256(byte[] content) {

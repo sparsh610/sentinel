@@ -1,6 +1,15 @@
 # Keeps the context smoke test from needing a live Postgres or Kafka. The repositories are
 # supplied as mocks by the test itself.
 spring:
+  security:
+    oauth2:
+      resourceserver:
+        jwt:
+          issuer-uri: http://localhost:8080/realms/sentinel
+          audiences: sentinel-api
+          authorities-claim-name: roles
+          authority-prefix: ROLE_
+          principal-claim-name: preferred_username
   autoconfigure:
     exclude:
       - org.springframework.boot.autoconfigure.jdbc.DataSourceAutoConfiguration

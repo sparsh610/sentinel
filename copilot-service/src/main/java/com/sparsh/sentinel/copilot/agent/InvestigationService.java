@@ -2,8 +2,10 @@ package com.sparsh.sentinel.copilot.agent;
 
 import com.sparsh.sentinel.copilot.agent.client.ScoringClient;
 import com.sparsh.sentinel.copilot.agent.client.ScoringClient.AlertSnapshot;
+import com.sparsh.sentinel.copilot.security.CurrentUser;
 import org.springframework.core.task.TaskExecutor;
 import org.springframework.http.HttpStatus;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.client.HttpClientErrorException;
@@ -20,6 +22,10 @@ import java.util.UUID;
  * starts, CLOSED when the analyst closes it, ESCALATED only when a senior approver signs off. A
  * decision is saved in the same database transaction as that call, so a failed call to
  * scoring-service leaves no half-made decision behind.
+ *
+ * <p>Who is acting comes from the Keycloak token, never from the request body, and the role
+ * checks sit on these methods rather than only on the URLs: the MCP endpoint reaches
+ * {@link #start} without passing the REST controller, and gets the same rule.
  */
 @Service
 public class InvestigationService {
@@ -47,8 +53,14 @@ public class InvestigationService {
     /**
      * Starts an investigation and returns at once; the agent runs in the background. An alert
      * that already has one in progress or awaiting a decision gets that one back, not a second.
+     *
+     * <p>The run is recorded against the person who started it, and its policy lookup is held to
+     * what that person may see - the agent has no identity of its own to widen it.
      */
+    @PreAuthorize("hasAnyRole('ANALYST', 'SENIOR_APPROVER')")
     public InvestigationView start(UUID alertId) {
+        CurrentUser user = CurrentUser.get();
+
         AlertSnapshot alert;
         try {
             alert = scoring.alert(alertId);
@@ -73,23 +85,29 @@ public class InvestigationService {
 
         scoring.moveAlert(alertId, "IN_REVIEW");
         Investigation investigation = investigations.save(Investigation.start(alertId, alert.transactionId(),
-                alert.customerId(), alert.amount(), alert.currency(), planner, clock.instant()));
+                alert.customerId(), alert.amount(), alert.currency(), planner, user.name(), user.clearance(),
+                clock.instant()));
         executor.execute(() -> runner.run(investigation.getId()));
         return InvestigationView.of(investigation);
     }
 
+    @PreAuthorize("hasAnyRole('ANALYST', 'SENIOR_APPROVER')")
     @Transactional(readOnly = true)
     public InvestigationView get(UUID id) {
         return InvestigationView.of(find(id));
     }
 
+    @PreAuthorize("hasAnyRole('ANALYST', 'SENIOR_APPROVER')")
     @Transactional(readOnly = true)
     public List<InvestigationView> forAlert(UUID alertId) {
         return investigations.findByAlertIdOrderByStartedAtDesc(alertId).stream().map(InvestigationView::of).toList();
     }
 
+    /** The analyst's decision, in the name on their token. */
+    @PreAuthorize("hasRole('ANALYST')")
     @Transactional
-    public InvestigationView analystDecides(UUID id, InvestigationDecision.Action action, String analyst, String comment) {
+    public InvestigationView analystDecides(UUID id, InvestigationDecision.Action action, String comment) {
+        String analyst = CurrentUser.get().name();
         Investigation investigation = find(id);
         investigation.analystDecides(action, analyst, comment, clock.instant());
         if (action == InvestigationDecision.Action.CLOSE) {
@@ -98,9 +116,14 @@ public class InvestigationService {
         return InvestigationView.of(investigation);
     }
 
+    /**
+     * The senior approver's sign-off, in the name on their token. Four eyes is checked against
+     * that name, so it can no longer be met by typing a different one.
+     */
+    @PreAuthorize("hasRole('SENIOR_APPROVER')")
     @Transactional
-    public InvestigationView approverDecides(UUID id, InvestigationDecision.Action action, String approver,
-                                             String comment) {
+    public InvestigationView approverDecides(UUID id, InvestigationDecision.Action action, String comment) {
+        String approver = CurrentUser.get().name();
         Investigation investigation = find(id);
         investigation.approverDecides(action, approver, comment, clock.instant());
         if (action == InvestigationDecision.Action.APPROVE) {

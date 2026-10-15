@@ -2,6 +2,7 @@ package com.sparsh.sentinel.copilot.agent.client;
 
 import com.sparsh.sentinel.copilot.agent.AgentProperties;
 import org.springframework.core.ParameterizedTypeReference;
+import org.springframework.security.oauth2.client.web.client.OAuth2ClientHttpRequestInterceptor;
 import org.springframework.stereotype.Component;
 import org.springframework.web.client.ResourceAccessException;
 import org.springframework.web.client.RestClient;
@@ -16,8 +17,10 @@ public class IngestClient {
 
     private final RestClient http;
 
-    public IngestClient(RestClient.Builder builder, AgentProperties properties) {
-        this.http = builder.baseUrl(properties.ingestUrl()).build();
+    /** @param serviceToken adds copilot-service's own token - see SecurityConfig. */
+    public IngestClient(RestClient.Builder builder, AgentProperties properties,
+                        OAuth2ClientHttpRequestInterceptor serviceToken) {
+        this.http = builder.baseUrl(properties.ingestUrl()).requestInterceptor(serviceToken).build();
     }
 
     public List<Transaction> recent(String customerId, int limit) {

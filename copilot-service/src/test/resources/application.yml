@@ -6,6 +6,25 @@
 # to be repeated here - the OpenAI starter would otherwise autoconfigure speech, image and
 # moderation models and fail the context for want of an API key.
 spring:
+  security:
+    oauth2:
+      resourceserver:
+        jwt:
+          issuer-uri: http://localhost:8080/realms/sentinel
+          audiences: sentinel-api
+          authorities-claim-name: roles
+          authority-prefix: ROLE_
+          principal-claim-name: preferred_username
+      client:
+        registration:
+          copilot:
+            provider: keycloak
+            client-id: copilot-service
+            client-secret: test-secret
+            authorization-grant-type: client_credentials
+        provider:
+          keycloak:
+            token-uri: http://localhost:8080/realms/sentinel/protocol/openid-connect/token
   ai:
     mcp:
       server:
