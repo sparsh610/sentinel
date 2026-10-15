@@ -1,16 +1,24 @@
 # Publishes the investigation tools as an MCP server, so Claude Code or Codex CLI can use them.
 #
 #   mvn -pl copilot-service spring-boot:run -Dspring-boot.run.profiles=mcp
-#   claude mcp add --transport http sentinel http://localhost:8081/mcp
-#   codex mcp add sentinel --url http://localhost:8081/mcp
+#   export SENTINEL_TOKEN=$(scripts/sentinel-token.sh alex.analyst alex)
+#   claude mcp add --transport http sentinel http://localhost:8081/mcp --header "Authorization: Bearer $SENTINEL_TOKEN"
+#   codex mcp add sentinel --url http://localhost:8081/mcp --bearer-token-env-var SENTINEL_TOKEN
 #
 # ---------------------------------------------------------------------------------------
-# WARNING - the client on the other end is a hosted model. What the tools return - alerts,
-# customer histories, counterparties - goes to that model's provider.
+# The client on the other end is a hosted model, so what the tools return goes to that
+# model's provider. Three controls stand between the two (week 7, design decisions §6, §8, §16):
 #
-# Demo only, against the synthetic customers in db/demo. Masking personal data before it leaves
-# the service arrives in week 7, and with it authentication on this endpoint; until then do not
-# run this profile against real data, and do not expose port 8081 beyond localhost.
+#  * Authentication. /mcp needs a Keycloak token like every other endpoint, and the client acts
+#    as that person: their role checks, their document clearance.
+#  * Masking. Counterparty names, IBANs, card numbers and e-mail addresses leave as stable
+#    tokens (PARTY-3f9a1c2e); an investigation goes out with its masked note and without the
+#    tools' raw output.
+#  * Audit. Every call is an audit_event in the token's name - OK, DENIED or FAILED.
+#
+# Customer ids are not masked: they are the bank's pseudonymous keys and the tools need them.
+# Still demo data only - a real deployment would need the provider under contract (a DPA, zero
+# retention, in-region processing) before any of this left the bank.
 #
 # What it cannot do, by design: no tool approves, escalates, closes or reports a case. The MCP
 # client can read evidence and ask Sentinel's own agent for a draft; people decide, in the

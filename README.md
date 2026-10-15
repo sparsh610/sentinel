@@ -58,6 +58,8 @@ Sentinel puts all three in one system, and keeps a human as the approver.
                               │  · investigation   │
                               │    agent + tools   │
                               │  · PII masking     │
+                              │  · audit log       │
+                              │  · MCP server      │
                               └─────────┬──────────┘
                                         │ SSE
                               ┌─────────┴──────────┐
@@ -65,6 +67,8 @@ Sentinel puts all three in one system, and keeps a human as the approver.
                               │  Angular analyst   │
                               │  queue · case · chat│
                               └────────────────────┘
+
+  Keycloak (:8080) issues every token; all three services check it on every request.
 ```
 
 Full detail in [`docs/architecture.md`](docs/architecture.md).
@@ -88,15 +92,16 @@ Full detail in [`docs/architecture.md`](docs/architecture.md).
 **Prerequisites:** JDK 21+, Maven 3.9+, Docker, Node 20+.
 
 ```bash
-# 1. Infrastructure: Postgres + pgvector, and Kafka for the transaction stream
-docker compose --profile stream up -d
+# 1. Infrastructure: Postgres + pgvector, Kafka for the transaction stream, Keycloak for sign-in
+docker compose --profile stream --profile auth up -d
 
 # 2. Local LLM, optional but needed for the copilot
 docker compose --profile llm up -d
 docker exec sentinel-ollama ollama pull nomic-embed-text
 docker exec sentinel-ollama ollama pull llama3.1:8b
+docker exec sentinel-ollama ollama pull qwen2.5:3b
 
-# 3. Build and test everything
+# 3. Build and test everything (the tests need none of the containers)
 mvn clean test
 
 # 4. Run the services (one terminal each)
@@ -114,8 +119,28 @@ cd console && npm install && npm start
 | tx-ingest | http://localhost:8082/actuator/health |
 | scoring-service | http://localhost:8083/actuator/health |
 | console | http://localhost:4200 |
+| Keycloak | http://localhost:8080 (admin console: `admin` / `admin`) |
 
-Add `--profile llm` for the local model and `--profile auth` for Keycloak (week 7).
+### Signing in
+
+Every request to every service needs a Keycloak token. The console signs you in on first load.
+The realm in [`db/keycloak/sentinel-realm.json`](db/keycloak/sentinel-realm.json) is imported on
+start and has three demo users:
+
+| User / password | Roles | May |
+|---|---|---|
+| `alex.analyst` / `alex` | ANALYST | investigate, close or escalate; read PUBLIC and INTERNAL policy |
+| `bea.analyst` / `bea` | ANALYST | the same - a second analyst |
+| `sam.senior` / `sam` | ANALYST, SENIOR_APPROVER | also sign off escalations (never their own), read CONFIDENTIAL policy, upload policy, read the audit log |
+
+For curl, or an MCP client, get a token from the command line (valid 8 hours):
+
+```bash
+export SENTINEL_TOKEN=$(scripts/sentinel-token.sh alex.analyst alex)
+```
+
+Service to service, copilot-service calls scoring-service and tx-ingest with its own service
+account (client credentials, role `SERVICE`), so the agent works on its background thread.
 
 ## The alert pipeline
 
@@ -124,14 +149,21 @@ in the console shows the queue. The quickest way to see it work is the simulator
 batch of ordinary synthetic traffic with three known typologies planted in it:
 
 ```bash
-curl -X POST "http://localhost:8082/api/simulations?ordinary=40"
-curl http://localhost:8083/api/alerts
+AUTH="Authorization: Bearer $SENTINEL_TOKEN"
+curl -X POST -H "$AUTH" "http://localhost:8082/api/simulations?ordinary=40"
+curl -H "$AUTH" http://localhost:8083/api/alerts
 ```
 
-Or press **Simulate traffic** in the console. A single transaction:
+Or press **Simulate traffic** in the console. A single transaction is booked by a source
+system, not a person - the `sentinel-feeder` service account, role `INGEST`:
 
 ```bash
-curl -X POST http://localhost:8082/api/transactions      -H "Content-Type: application/json"      -d '{"externalRef":"BANK-0001","customerId":"C-10002","direction":"CREDIT","channel":"CASH",
+FEED=$(curl -s -d grant_type=client_credentials -d client_id=sentinel-feeder \
+       -d client_secret=sentinel-feeder-secret \
+       http://localhost:8080/realms/sentinel/protocol/openid-connect/token | sed -E 's/.*"access_token":"([^"]+)".*/\1/')
+curl -X POST http://localhost:8082/api/transactions -H "Authorization: Bearer $FEED" \
+     -H "Content-Type: application/json" \
+     -d '{"externalRef":"BANK-0001","customerId":"C-10002","direction":"CREDIT","channel":"CASH",
           "amount":15000,"currency":"EUR","bookedAt":"2026-09-23T10:00:00Z"}'
 ```
 
@@ -143,8 +175,9 @@ curl -X POST http://localhost:8082/api/transactions      -H "Content-Type: appli
 | `GET :8083/api/alerts` | The open queue, most serious first, each alert with the findings that raised it |
 | `POST :8081/api/investigations` | Start the investigation agent on an alert (`{"alertId": …}`); returns at once, the agent runs in the background |
 | `GET :8081/api/investigations/{id}` | The case: execution trace, drafted note, decisions |
-| `POST :8081/api/investigations/{id}/decision` | Analyst: `ESCALATE` or `CLOSE` |
+| `POST :8081/api/investigations/{id}/decision` | Analyst: `ESCALATE` or `CLOSE`, in the name on the token |
 | `POST :8081/api/investigations/{id}/sign-off` | Senior approver (a different person): `APPROVE` or `RETURN` |
+| `GET :8081/api/audit` | Senior approver: the audit log, newest first (`?actor=`, `?action=`, `?limit=`) |
 
 Detection is three rules — cash at or above EUR 10,000, **structuring** (three or more cash
 deposits just under that within 24 hours), and any payment involving a FATF high-risk
@@ -177,13 +210,20 @@ fixed plan. Why it works this way: [`docs/design-decisions.md`](docs/design-deci
 ### Investigating from Claude Code or Codex (MCP)
 
 The same tools are published as an MCP server, so a coding-agent CLI can investigate an alert
-with its own model. Demo data only until week 7 adds masking — see `application-mcp.yml`.
+with its own model. The client acts as the person whose token it carries: the same role checks
+and document ACL apply, every call is audited in that name, and **everything it is sent is
+masked** - counterparties, IBANs, card numbers and e-mail addresses arrive as stable tokens such
+as `PARTY-3f9a1c2e`, because the model behind the client is a third party's.
 
 ```bash
 mvn -pl copilot-service spring-boot:run -Dspring-boot.run.profiles=mcp
+export SENTINEL_TOKEN=$(scripts/sentinel-token.sh alex.analyst alex)
 
-claude mcp add --transport http sentinel http://localhost:8081/mcp   # Claude Code
-codex mcp add sentinel --url http://localhost:8081/mcp               # Codex CLI
+# Claude Code
+claude mcp add --transport http sentinel http://localhost:8081/mcp \
+       --header "Authorization: Bearer $SENTINEL_TOKEN"
+# Codex CLI (reads the token from the variable each time it connects)
+codex mcp add sentinel --url http://localhost:8081/mcp --bearer-token-env-var SENTINEL_TOKEN
 ```
 
 Then ask, for example: *"Using the sentinel tools, find an open alert with a high-risk
@@ -197,22 +237,30 @@ Ingest a policy document, then ask questions over it. There is a synthetic corpu
 [`docs/sample-policies/`](docs/sample-policies/).
 
 ```bash
-curl -F "file=@docs/sample-policies/internal-aml-policy.txt" \
+# Uploading decides who will be shown a document, so it is for senior approvers
+SENIOR=$(scripts/sentinel-token.sh sam.senior sam)
+curl -H "Authorization: Bearer $SENIOR" \
+     -F "file=@docs/sample-policies/internal-aml-policy.txt" \
      -F "classification=INTERNAL" \
      -F "title=Internal AML Policy" \
      http://localhost:8081/api/documents
 
 curl -X POST http://localhost:8081/api/chat/ask \
+     -H "Authorization: Bearer $SENTINEL_TOKEN" \
      -H "Content-Type: application/json" \
      -d '{"question":"When does a structuring pattern have to be reported?"}'
 ```
 
 | Endpoint | Purpose |
 |---|---|
-| `POST /api/documents` | Upload a document. `classification` is required — `PUBLIC`, `INTERNAL` or `CONFIDENTIAL` — and has no default on purpose |
-| `GET /api/documents` | What has been ingested |
+| `POST /api/documents` | Upload a document (senior approver). `classification` is required — `PUBLIC`, `INTERNAL` or `CONFIDENTIAL` — and has no default on purpose |
+| `GET /api/documents` | The ingested documents the caller may see |
 | `POST /api/chat/ask` | Answer with citations, blocking |
 | `POST /api/chat/stream` | The same, as SSE: a `citations` event first, then `token` events, then `done` |
+
+Retrieval applies the **document ACL** inside the vector search: an analyst's question can only
+match PUBLIC and INTERNAL chunks, so a CONFIDENTIAL procedure is never quoted, cited or passed
+to a model for them - whether they ask in the console, over MCP, or through the agent.
 
 Every answer is grounded in retrieved chunks and cites them inline as `[1]`, `[2]`. When
 retrieval finds nothing above the similarity threshold the service answers **"I don't have a
@@ -288,8 +336,9 @@ will echo the question back or append a stray refusal. Use a larger model
 The reasoning behind the shape of this system is in
 [`docs/design-decisions.md`](docs/design-decisions.md) — why Kafka rather than a REST call, why
 the models are exported to ONNX rather than served from a Python process, why there is both a
-supervised and an unsupervised model, why ingest publishes through an outbox, and why the agent
-cannot close a case on its own.
+supervised and an unsupervised model, why ingest publishes through an outbox, why the agent
+cannot close a case on its own, why personal data is masked before a model sees it, and why every
+service checks the token itself.
 
 ## Repository layout
 
@@ -300,6 +349,8 @@ scoring-service/   scores the stream with rules and ONNX models, raises alerts
 console/           Angular analyst UI
 ml/                Python notebooks that train the models and export ONNX
 db/init/           Postgres bootstrap (pgvector extension, schemas)
+db/keycloak/       the sentinel realm: roles, clients, demo users
+scripts/           sentinel-token.sh - a demo user's token for curl and MCP clients
 docs/              architecture, design decisions, roadmap
 ```
 

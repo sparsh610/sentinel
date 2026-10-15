@@ -104,6 +104,29 @@ account it never saw.
 **Cost:** masking degrades retrieval when the query is genuinely about a specific account, so
 the masking layer is applied to model-bound text, not to the database queries the tools run.
 
+**As built (week 7).** `PiiMasker` turns a value into a keyed hash token: `PARTY-3f9a1c2e`,
+`IBAN-…`, `CARD-…`, `EMAIL-…`. Keyed, so a token cannot be reversed or guessed from a list of
+names without `sentinel.privacy.mask-key`; deterministic, so the same counterparty is the same
+token in the case note, in every MCP result and across calls - a model can still see that two
+payments went to one party without learning who it is.
+
+- **Names are masked because the field says so** - the alert's and the history's counterparty
+  names are registered, then replaced wherever they occur, findings' reasons included. Account
+  numbers and e-mail addresses are found by pattern, checked with mod-97 and Luhn so a clause
+  number or an amount is left alone.
+- **The agent's prompt is masked; the analyst's note is not.** qwen writes with the tokens, the
+  session that masked the prompt puts the names back for the analyst, and the model's own text
+  is kept as `case_note_masked` - which is what an MCP client is shown.
+- **MCP results are masked at the adapter**, and an investigation leaves without the raw tool
+  output in its trace. Policy questions are masked on the way to the model (which, with the
+  `cloud` profile, is a third party's); audit details are masked before they are written.
+- **Not masked: customer ids.** They are the bank's pseudonymous keys, the tools take them as
+  arguments, and the customer's name is never in anything the tools return.
+
+**Limits.** A name the code does not know is a name - say, typed into a policy question - is not
+masked; only the patterns are. A token the model splits across two streamed chunks reaches the
+console still masked: the safe way to fail.
+
 ## 7. Why three services and not seven
 
 Ingest, scoring and copilot are separated because they have genuinely different scaling and
@@ -149,9 +172,9 @@ code the internal agent uses. Claude Code and Codex CLI connect with one command
 client's own model does the reasoning — so a strong model investigates without Sentinel holding
 an API key, and the client pays for its own inference.
 
-- **Off by default.** The server starts only with the `mcp` profile. Until week 7 brings
-  masking and authentication, what these tools return reaches the client's model provider, so
-  the profile is for the synthetic demo data and localhost only, and says so in its config.
+- **Off by default.** The server starts only with the `mcp` profile, and needs a Keycloak token
+  like every other endpoint (week 7). The client acts as the person on the token - their role
+  checks, their document clearance - and what it is sent is masked (§6).
 - **Published to the MCP server only.** The tools go to the server as MCP tool specifications,
   not as a `ToolCallbackProvider` bean: Spring AI gathers provider beans into the resolver its
   own chat models use, which would have made them callable by Sentinel's internal model too —
@@ -160,7 +183,7 @@ an API key, and the client pays for its own inference.
 - **Nothing that decides.** A test fails if a published tool's name suggests approving,
   escalating, closing, reporting or signing off. Identifiers coming from the model are parsed
   before any call is made.
-- **Every call is logged** with its arguments; week 7 turns those lines into `audit_event` rows.
+- **Every call is an `audit_event`** in the token's name, OK, DENIED or FAILED (§16).
 
 
 ## 9. Why the model runs locally by default
@@ -334,10 +357,10 @@ transaction, so the features can be built identically on both sides:
 **Rejected:** letting a hosted model (Claude, GPT) plan the investigation by calling tools, and
 running a large local model (8B+) for it.
 
-- **The prompt carries customer data from here on.** Masking it before it may leave the machine
-  is week 7 (§6). Until then a hosted model is not an option — the `cloud` profile's chat model
-  is never given an investigation: the note falls back to a template and the planner to the fixed
-  plan whenever the configured chat model is not the local Ollama one (`CaseNoteWriter`).
+- **The prompt carries customer data.** It is masked (§6), but the local model stays the only
+  one given an investigation: masking is a second line, not a licence. The `cloud` profile's chat
+  model is never given one - the note falls back to a template and the planner to the fixed plan
+  whenever the configured chat model is not the local Ollama one (`CaseNoteWriter`).
 - **It has to run on the laptop it is demonstrated on.** `qwen2.5:3b` (1.9 GB) fits beside
   Postgres, Kafka and three JVMs; an 8B model does not. It is unloaded a minute after use.
 - **A fixed plan is what an investigation playbook is.** The same evidence in the same order is
@@ -364,11 +387,45 @@ marked "model did not ask" in the trace.
 
 **Known limits:**
 
-- **Who decides is taken from the request** until week 7 brings authentication; the four-eyes
-  rule already holds, the role check does not yet.
 - **A 3B model writes a serviceable draft, not a reliable one.** In testing it got the amount
   right and cited the right clauses once the clause numbers were named in its input, but it can
   still overstate ("a history of structuring"). It is a draft, read by the analyst before any
   decision — which is the design, not a workaround. CPU-only, a note takes about a minute.
 - **Runs are threads in copilot-service.** A restart interrupts them; they are marked FAILED at
   start-up rather than left RUNNING, and can be run again from the console.
+
+## 16. Why every service checks the token, and who the agent works as
+
+**Rejected:** authenticating at the console only, or at a gateway in front of the services, and
+trusting everything behind it.
+
+- **Each service is a resource server.** tx-ingest, scoring-service and copilot-service each
+  validate the Keycloak token on every request: issuer, signature, and audience `sentinel-api`.
+  Roles come from the token's `roles` claim. A service reached directly, around the console,
+  applies the same rules - there is no "inside" that is trusted for being inside.
+- **The rules sit where the work is done.** URL rules are the outer fence; the decisions, the
+  upload and the investigation start also carry `@PreAuthorize`, and the document ACL is a filter
+  inside the vector search. The MCP endpoint reaches that code without passing the REST URLs
+  (§8), and gets the same answer.
+- **People act as themselves; services as themselves.** The name on a decision comes from the
+  token, never from the request body, so four eyes cannot be met by typing a second name.
+  copilot-service calls scoring-service and tx-ingest with its own service account (client
+  credentials, role `SERVICE`), because the agent runs on a background thread after the analyst's
+  request has gone. Only that account may move an alert's status, and it does so only when a
+  person's decision is recorded in copilot-service - an analyst's token cannot close an alert
+  behind the investigation's back. Booking a transaction needs `INGEST`, a source system's role.
+- **The agent has no clearance of its own.** An investigation records who started it and what
+  policy they may see; its policy lookup is held to that. Over MCP, the client carries a person's
+  token, and its tool calls are checked, masked and audited as that person.
+
+**The audit log** (`sentinel.audit_event`) records every decision, upload, policy question, MCP
+tool call, agent run and refused request, with the actor, the door it came through (API, MCP or
+AGENT) and the outcome. A decision and its audit line commit together; a refusal - including an
+attempt to sign off one's own escalation - is written in its own transaction, so the rollback that
+follows cannot erase it. Triggers make the table append-only.
+
+**Limits.** The demo realm's passwords are in the repository and the `sentinel-cli` client uses
+the password grant, which a real deployment would replace with the device or browser flow. The
+service account's secret is a default in `application.yml`, overridable by environment. The
+append-only triggers stop the application and anyone using its API, not a database
+administrator; a bank would ship the log to a store that role cannot write to.

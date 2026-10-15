@@ -10,14 +10,25 @@ not committed: the files are large, and licensing varies by publisher.
 ## Try it
 
 ```bash
-# ingest
-curl -F "file=@docs/sample-policies/internal-aml-policy.txt"      -F "classification=INTERNAL"      -F "title=Internal AML Policy"      http://localhost:8081/api/documents
+# ingest - uploading is for senior approvers, who decide the classification
+SENIOR=$(scripts/sentinel-token.sh sam.senior sam)
+curl -H "Authorization: Bearer $SENIOR" -F "file=@docs/sample-policies/internal-aml-policy.txt" \
+     -F "classification=INTERNAL" -F "title=Internal AML Policy" http://localhost:8081/api/documents
+curl -H "Authorization: Bearer $SENIOR" -F "file=@docs/sample-policies/confidential-sar-handbook.txt" \
+     -F "classification=CONFIDENTIAL" -F "title=SAR Handling Procedure" http://localhost:8081/api/documents
 
-# ask
-curl -X POST http://localhost:8081/api/chat/ask      -H "Content-Type: application/json"      -d '{"question":"When does a structuring pattern have to be reported?"}'
+# ask, as an analyst
+ANALYST=$(scripts/sentinel-token.sh alex.analyst alex)
+curl -X POST http://localhost:8081/api/chat/ask -H "Authorization: Bearer $ANALYST" \
+     -H "Content-Type: application/json" \
+     -d '{"question":"When does a structuring pattern have to be reported?"}'
 ```
 
 A good answer cites AML-04.2 and AML-04.3 and states the 24-hour deadline.
+
+`confidential-sar-handbook.txt` exists to show the document ACL. Ask *"How quickly must a
+signed-off report be filed?"* as `alex.analyst` and the SAR procedure is never among the sources;
+ask as `sam.senior` and it is, citing SAR-01.1.
 
 ## Questions worth keeping
 

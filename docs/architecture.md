@@ -75,7 +75,7 @@ Two schemas in one Postgres instance:
 
 | Schema | Tables |
 |---|---|
-| `sentinel` | `customer`, `transaction`, `outbox_event` (tx-ingest) · `scored_transaction`, `alert`, `alert_finding` (scoring-service) · `investigation`, `investigation_step`, `investigation_decision` (copilot-service) · `audit_event` (week 7) |
+| `sentinel` | `customer`, `transaction`, `outbox_event` (tx-ingest) · `scored_transaction`, `alert`, `alert_finding` (scoring-service) · `investigation`, `investigation_step`, `investigation_decision` (copilot-service) · `audit_event` (copilot-service, append-only) |
 | `knowledge` | `document`, `document_chunk` (with the `vector` column), `document_acl` |
 
 They are separate so that re-indexing the policy corpus can never touch operational or audit
