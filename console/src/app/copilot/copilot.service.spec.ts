@@ -2,6 +2,8 @@ import { provideHttpClient } from '@angular/common/http';
 import { TestBed } from '@angular/core/testing';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { signedInAs } from '../auth/auth.testing';
+
 import { CopilotService, StreamEvent } from './copilot.service';
 
 /** Builds one SSE frame the way copilot-service writes it. */
@@ -20,7 +22,7 @@ describe('CopilotService stream parsing', () => {
 
   beforeEach(() => {
     vi.restoreAllMocks();
-    TestBed.configureTestingModule({ providers: [provideHttpClient()] });
+    TestBed.configureTestingModule({ providers: [provideHttpClient(), signedInAs('alex.analyst', 'ANALYST')] });
     service = TestBed.inject(CopilotService);
   });
 

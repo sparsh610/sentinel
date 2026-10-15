@@ -12,6 +12,8 @@ import {
   STATUS_LABELS,
   TOOL_LABELS,
 } from './investigation.models';
+import { Auth } from '../auth/auth';
+
 import { InvestigationsService } from './investigations.service';
 
 /** How often to refresh while the agent is still working. Stops once it has drafted. */
@@ -30,15 +32,33 @@ export class InvestigationPage {
 
   private readonly service = inject(InvestigationsService);
   private readonly router = inject(Router);
+  protected readonly auth = inject(Auth);
 
   protected readonly investigation = signal<Investigation | null>(null);
   protected readonly error = signal<string | null>(null);
   protected readonly busy = signal(false);
   protected readonly openStep = signal<number | null>(null);
-  protected readonly actor = signal('');
   protected readonly comment = signal('');
 
   protected readonly status = computed(() => this.investigation()?.status);
+  /** Whether the signed-in person may take the decision this case is waiting for. */
+  protected readonly canDecide = computed(() => {
+    const status = this.status();
+    if (status === 'DRAFTED') {
+      return this.auth.hasRole('ANALYST');
+    }
+    if (status === 'AWAITING_SIGN_OFF') {
+      return this.auth.hasRole('SENIOR_APPROVER') && !this.escalatedByMe();
+    }
+    return false;
+  });
+
+  /** Four eyes: whoever escalated cannot sign off. The service refuses it too; this says why up front. */
+  protected readonly escalatedByMe = computed(() => {
+    const escalation = this.investigation()?.decisions.filter(d => d.action === 'ESCALATE').at(-1);
+    return escalation?.actor === this.auth.username;
+  });
+
   protected readonly statusLabel = computed(() => {
     const status = this.status();
     return status ? STATUS_LABELS[status] : '';
@@ -83,24 +103,18 @@ export class InvestigationPage {
     this.openStep.update(open => (open === step.stepNo ? null : step.stepNo));
   }
 
-  protected setActor(event: Event): void {
-    this.actor.set((event.target as HTMLInputElement).value);
-  }
-
   protected setComment(event: Event): void {
     this.comment.set((event.target as HTMLTextAreaElement).value);
   }
 
   protected decide(action: DecisionAction): void {
     const current = this.investigation();
-    const actor = this.actor().trim();
-    if (!current || !actor) {
-      this.error.set('Enter your name first - every decision is recorded against a person.');
+    if (!current) {
       return;
     }
     const call = current.status === 'AWAITING_SIGN_OFF'
-      ? this.service.signOff(current.id, action, actor, this.comment())
-      : this.service.decide(current.id, action, actor, this.comment());
+      ? this.service.signOff(current.id, action, this.comment())
+      : this.service.decide(current.id, action, this.comment());
 
     this.busy.set(true);
     call.subscribe({

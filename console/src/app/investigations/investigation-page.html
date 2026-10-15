@@ -67,7 +67,19 @@
           <p class="meta">The agent is gathering evidence. The note appears when it has finished.</p>
         }
 
-        @if (inv.status === 'DRAFTED' || inv.status === 'AWAITING_SIGN_OFF') {
+        @if ((inv.status === 'DRAFTED' || inv.status === 'AWAITING_SIGN_OFF') && !canDecide()) {
+          <p class="meta waiting">
+            @if (escalatedByMe() && auth.hasRole('SENIOR_APPROVER')) {
+              You escalated this case, so another senior approver has to sign it off (AML-05.2).
+            } @else if (inv.status === 'DRAFTED') {
+              Waiting for an analyst's decision.
+            } @else {
+              Waiting for a senior approver's sign-off.
+            }
+          </p>
+        }
+
+        @if (canDecide()) {
           <form class="decision" (submit)="$event.preventDefault()">
             <h3>{{ inv.status === 'DRAFTED' ? 'Analyst decision' : 'Senior approver sign-off' }}</h3>
             <p class="meta">
@@ -76,11 +88,8 @@
               } @else {
                 Must be a different person from the analyst who escalated.
               }
+              Recorded as <strong>{{ auth.username }}</strong>.
             </p>
-            <label>
-              Your name
-              <input type="text" [value]="actor()" (input)="setActor($event)" maxlength="64" autocomplete="name" />
-            </label>
             <label>
               Comment
               <textarea rows="3" [value]="comment()" (input)="setComment($event)" maxlength="2000"></textarea>

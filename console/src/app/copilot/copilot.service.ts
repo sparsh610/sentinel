@@ -2,6 +2,8 @@ import { HttpClient } from '@angular/common/http';
 import { Injectable, inject } from '@angular/core';
 import { Observable } from 'rxjs';
 
+import { Auth } from '../auth/auth';
+
 import { Citation, DocumentSummary } from './copilot.models';
 
 /** One frame off the SSE stream. */
@@ -18,6 +20,7 @@ const LINE_SEPARATOR = '\n';
 export class CopilotService {
 
   private readonly http = inject(HttpClient);
+  private readonly auth = inject(Auth);
 
   documents(): Observable<DocumentSummary[]> {
     return this.http.get<DocumentSummary[]>('/api/documents');
@@ -41,9 +44,14 @@ export class CopilotService {
    * them in a URL would scatter them through access logs.
    */
   async *ask(question: string, signal: AbortSignal): AsyncGenerator<StreamEvent> {
+    // fetch, not HttpClient, so the interceptor does not see it: the token is added here.
     const response = await fetch('/api/chat/stream', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json', Accept: 'text/event-stream' },
+      headers: {
+        'Content-Type': 'application/json',
+        Accept: 'text/event-stream',
+        Authorization: `Bearer ${await this.auth.token()}`,
+      },
       body: JSON.stringify({ question }),
       signal,
     });

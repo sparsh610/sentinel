@@ -24,13 +24,13 @@ export class InvestigationsService {
     return this.http.get<Investigation[]>('/api/investigations', { params: new HttpParams().set('alertId', alertId) });
   }
 
-  /** The analyst: ESCALATE or CLOSE. */
-  decide(id: string, action: DecisionAction, actor: string, comment: string): Observable<Investigation> {
-    return this.http.post<Investigation>(`/api/investigations/${id}/decision`, { action, actor, comment });
+  /** The analyst: ESCALATE or CLOSE. Who is deciding comes from the token, not from here. */
+  decide(id: string, action: DecisionAction, comment: string): Observable<Investigation> {
+    return this.http.post<Investigation>(`/api/investigations/${id}/decision`, { action, comment });
   }
 
   /** The senior approver: APPROVE or RETURN. */
-  signOff(id: string, action: DecisionAction, actor: string, comment: string): Observable<Investigation> {
-    return this.http.post<Investigation>(`/api/investigations/${id}/sign-off`, { action, actor, comment });
+  signOff(id: string, action: DecisionAction, comment: string): Observable<Investigation> {
+    return this.http.post<Investigation>(`/api/investigations/${id}/sign-off`, { action, comment });
   }
 }

@@ -1,0 +1,101 @@
+:host {
+  --ink: #1b1f24;
+  --muted: #5b6673;
+  --line: #dfe3e8;
+  --accent: #1f5fa9;
+  --error: #a32020;
+
+  display: block;
+  height: 100%;
+  overflow-y: auto;
+  color: var(--ink);
+}
+
+.toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  margin-bottom: 0.75rem;
+
+  form {
+    display: flex;
+    gap: 0.4rem;
+  }
+
+  input {
+    font: inherit;
+    font-size: 0.85rem;
+    padding: 0.35rem 0.6rem;
+    border: 1px solid var(--line);
+    border-radius: 0.3rem;
+    min-width: 16rem;
+  }
+
+  button {
+    font: inherit;
+    padding: 0.35rem 0.9rem;
+    border: 1px solid var(--accent);
+    border-radius: 0.3rem;
+    background: var(--accent);
+    color: #fff;
+    cursor: pointer;
+  }
+}
+
+.meta {
+  margin: 0;
+  font-size: 0.8rem;
+  color: var(--muted);
+}
+
+.error {
+  color: var(--error);
+}
+
+table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.82rem;
+
+  th {
+    text-align: left;
+    font-weight: 600;
+    color: var(--muted);
+    border-bottom: 1px solid var(--line);
+    padding: 0.4rem 0.5rem;
+  }
+
+  td {
+    border-bottom: 1px solid var(--line);
+    padding: 0.4rem 0.5rem;
+    vertical-align: top;
+  }
+
+  .when {
+    white-space: nowrap;
+  }
+
+  .sub {
+    color: var(--muted);
+    font-size: 0.75rem;
+  }
+
+  .channel {
+    padding: 0 0.35rem;
+    border: 1px solid var(--line);
+    border-radius: 0.25rem;
+    font-size: 0.72rem;
+  }
+
+  .detail {
+    color: var(--muted);
+    max-width: 32rem;
+  }
+
+  tr[data-outcome="DENIED"] .outcome,
+  tr[data-outcome="FAILED"] .outcome {
+    color: var(--error);
+    font-weight: 600;
+  }
+}

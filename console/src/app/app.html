@@ -7,7 +7,15 @@
   <nav>
     <a routerLink="/alerts" routerLinkActive="active">Alerts</a>
     <a routerLink="/copilot" routerLinkActive="active">Copilot</a>
+    @if (auth.hasRole('SENIOR_APPROVER')) {
+      <a routerLink="/audit" routerLinkActive="active">Audit log</a>
+    }
   </nav>
+
+  <div class="user">
+    <span>{{ auth.displayName }} <span class="role">· {{ roleLabel() }}</span></span>
+    <button type="button" (click)="auth.logout()">Sign out</button>
+  </div>
 </header>
 
 <main>
