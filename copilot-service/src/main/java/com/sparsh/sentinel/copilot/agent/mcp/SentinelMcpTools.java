@@ -7,16 +7,19 @@ import com.sparsh.sentinel.copilot.agent.InvestigationView;
 import com.sparsh.sentinel.copilot.agent.client.ScoringClient;
 import com.sparsh.sentinel.copilot.agent.client.ScoringClient.AlertSnapshot;
 import com.sparsh.sentinel.copilot.agent.client.ScoringClient.PeerSegment;
+import com.sparsh.sentinel.copilot.audit.AuditEvent.Channel;
+import com.sparsh.sentinel.copilot.audit.AuditEvent.Outcome;
+import com.sparsh.sentinel.copilot.audit.AuditLog;
 import com.sparsh.sentinel.copilot.chat.Citation;
 import com.sparsh.sentinel.copilot.security.CurrentUser;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 import org.springframework.ai.tool.annotation.Tool;
 import org.springframework.ai.tool.annotation.ToolParam;
+import org.springframework.security.access.AccessDeniedException;
 import org.springframework.stereotype.Component;
 
 import java.util.List;
 import java.util.UUID;
+import java.util.function.Supplier;
 
 /**
  * The investigation tools as an MCP client sees them - a thin adapter over the same
@@ -27,22 +30,25 @@ import java.util.UUID;
  * closing and signing off stay in the console, behind a named person (design decision §8). A test
  * fails if a tool whose name suggests a decision is ever added.
  *
- * <p>Every call is logged with its arguments; week 7 turns that into an {@code audit_event}.
+ * <p>Every call is an {@code audit_event} - who, which tool, with what, and whether it was allowed -
+ * written in the name on the client's token.
  */
 @Component
 public class SentinelMcpTools {
 
-    private static final Logger log = LoggerFactory.getLogger(SentinelMcpTools.class);
     private static final int MAX_ALERTS = 50;
 
     private final ScoringClient scoring;
     private final InvestigationTools tools;
     private final InvestigationService investigations;
+    private final AuditLog audit;
 
-    public SentinelMcpTools(ScoringClient scoring, InvestigationTools tools, InvestigationService investigations) {
+    public SentinelMcpTools(ScoringClient scoring, InvestigationTools tools, InvestigationService investigations,
+                            AuditLog audit) {
         this.scoring = scoring;
         this.tools = tools;
         this.investigations = investigations;
+        this.audit = audit;
     }
 
     @Tool(name = "listOpenAlerts", resultConverter = IsoDateResultConverter.class, description = """
@@ -51,16 +57,14 @@ public class SentinelMcpTools {
     public List<AlertSnapshot> listOpenAlerts(
             @ToolParam(description = "How many alerts, 1-50", required = false) Integer limit) {
         int n = limit == null ? 20 : Math.max(1, Math.min(limit, MAX_ALERTS));
-        log.info("MCP listOpenAlerts(limit={})", n);
-        return scoring.openAlerts(n);
+        return audited("listOpenAlerts", null, "limit=" + n, () -> scoring.openAlerts(n));
     }
 
     @Tool(name = "riskScore", resultConverter = IsoDateResultConverter.class, description = """
             One alert in full: the transaction it was raised on, its overall score, and every finding
             with its score and the reason it fired.""")
     public AlertSnapshot riskScore(@ToolParam(description = "The alert's id (a UUID)") String alertId) {
-        log.info("MCP riskScore({})", alertId);
-        return tools.riskScore(uuid(alertId, "alertId"));
+        return audited("riskScore", alertId, null, () -> tools.riskScore(uuid(alertId, "alertId")));
     }
 
     @Tool(name = "customerHistory", resultConverter = IsoDateResultConverter.class, description = """
@@ -68,8 +72,7 @@ public class SentinelMcpTools {
             transactions, distinct counterparties and their countries, and the newest few.""")
     public Evidence.History customerHistory(
             @ToolParam(description = "The customer's id, e.g. C-20001") String customerId) {
-        log.info("MCP customerHistory({})", customerId);
-        return tools.customerHistory(customerId);
+        return audited("customerHistory", customerId, null, () -> tools.customerHistory(customerId));
     }
 
     @Tool(name = "peerSegment", resultConverter = IsoDateResultConverter.class, description = """
@@ -78,8 +81,8 @@ public class SentinelMcpTools {
             transaction is unusual for that segment. Use the alert's transactionId.""")
     public PeerSegment peerSegment(
             @ToolParam(description = "The transaction's id (a UUID) - the alert's transactionId") String transactionId) {
-        log.info("MCP peerSegment({})", transactionId);
-        return tools.peerSegment(uuid(transactionId, "transactionId"));
+        return audited("peerSegment", transactionId, null,
+                () -> tools.peerSegment(uuid(transactionId, "transactionId")));
     }
 
     @Tool(name = "policyLookup", resultConverter = IsoDateResultConverter.class, description = """
@@ -87,8 +90,8 @@ public class SentinelMcpTools {
             their clause text, so an answer can cite the clause (e.g. AML-04.2).""")
     public List<Citation> policyLookup(
             @ToolParam(description = "What to look up, e.g. 'structuring reporting threshold'") String question) {
-        log.info("MCP policyLookup({})", question);
-        return tools.policyLookup(question, CurrentUser.get().clearance());
+        return audited("policyLookup", null, question,
+                () -> tools.policyLookup(question, CurrentUser.get().clearance()));
     }
 
     @Tool(name = "draftCaseNote", resultConverter = IsoDateResultConverter.class, description = """
@@ -97,8 +100,8 @@ public class SentinelMcpTools {
             minute; while its status is RUNNING, call getInvestigation with the returned id.
             This only drafts - it cannot escalate, close or report a case; people do that.""")
     public InvestigationView draftCaseNote(@ToolParam(description = "The alert's id (a UUID)") String alertId) {
-        log.info("MCP draftCaseNote({})", alertId);
-        return investigations.start(uuid(alertId, "alertId"));
+        return audited("draftCaseNote", alertId, null,
+                () -> investigations.start(uuid(alertId, "alertId"), Channel.MCP));
     }
 
     @Tool(name = "getInvestigation", resultConverter = IsoDateResultConverter.class, description = """
@@ -106,8 +109,25 @@ public class SentinelMcpTools {
             the drafted case note once ready, and any decisions people have taken.""")
     public InvestigationView getInvestigation(
             @ToolParam(description = "The investigation's id (a UUID), from draftCaseNote") String investigationId) {
-        log.info("MCP getInvestigation({})", investigationId);
-        return investigations.get(uuid(investigationId, "investigationId"));
+        return audited("getInvestigation", investigationId, null,
+                () -> investigations.get(uuid(investigationId, "investigationId")));
+    }
+
+    /** Runs one tool call and writes its audit line - OK, DENIED by a role check, or FAILED. */
+    private <T> T audited(String tool, String target, String detail, Supplier<T> call) {
+        String action = "TOOL_CALL " + tool;
+        try {
+            T result = call.get();
+            audit.record(Channel.MCP, action, target, Outcome.OK, detail);
+            return result;
+        } catch (AccessDeniedException e) {
+            audit.refused(Channel.MCP, action, target, Outcome.DENIED, detail);
+            throw e;
+        } catch (RuntimeException e) {
+            audit.refused(Channel.MCP, action, target, Outcome.FAILED,
+                    (detail == null ? "" : detail + " - ") + e.getClass().getSimpleName() + ": " + e.getMessage());
+            throw e;
+        }
     }
 
     private static UUID uuid(String value, String name) {

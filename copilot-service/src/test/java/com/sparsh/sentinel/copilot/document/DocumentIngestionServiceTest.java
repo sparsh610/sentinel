@@ -35,6 +35,9 @@ class DocumentIngestionServiceTest {
     @Mock
     private DocumentRepository repository;
 
+    @Mock
+    private com.sparsh.sentinel.copilot.audit.AuditLog audit;
+
     // The real splitter, not a mock: chunking behaviour is part of what is under test.
     private final TokenTextSplitter splitter = TokenTextSplitter.builder()
             .withChunkSize(200)
@@ -51,7 +54,7 @@ class DocumentIngestionServiceTest {
 
     private DocumentIngestionService service() {
         if (service == null) {
-            service = new DocumentIngestionService(vectorStore, splitter, repository, extractor);
+            service = new DocumentIngestionService(vectorStore, splitter, repository, extractor, audit);
         }
         return service;
     }
@@ -62,7 +65,7 @@ class DocumentIngestionServiceTest {
             throw new DocumentIngestionService.ExtractionFailedException(
                     filename, new IllegalStateException("corrupt container"));
         };
-        return new DocumentIngestionService(vectorStore, splitter, repository, failing);
+        return new DocumentIngestionService(vectorStore, splitter, repository, failing, audit);
     }
 
     @Test

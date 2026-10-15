@@ -2,6 +2,9 @@ package com.sparsh.sentinel.copilot.agent;
 
 import com.sparsh.sentinel.copilot.agent.client.ScoringClient;
 import com.sparsh.sentinel.copilot.agent.client.ScoringClient.AlertSnapshot;
+import com.sparsh.sentinel.copilot.audit.AuditEvent.Channel;
+import com.sparsh.sentinel.copilot.audit.AuditEvent.Outcome;
+import com.sparsh.sentinel.copilot.audit.AuditLog;
 import com.sparsh.sentinel.copilot.security.CurrentUser;
 import org.springframework.core.task.TaskExecutor;
 import org.springframework.http.HttpStatus;
@@ -36,17 +39,19 @@ public class InvestigationService {
     private final TaskExecutor executor;
     private final CaseNoteWriter noteWriter;
     private final AgentProperties properties;
+    private final AuditLog audit;
     private final Clock clock;
 
     public InvestigationService(InvestigationRepository investigations, ScoringClient scoring,
                                 InvestigationRunner runner, TaskExecutor executor, CaseNoteWriter noteWriter,
-                                AgentProperties properties, Clock clock) {
+                                AgentProperties properties, AuditLog audit, Clock clock) {
         this.investigations = investigations;
         this.scoring = scoring;
         this.runner = runner;
         this.executor = executor;
         this.noteWriter = noteWriter;
         this.properties = properties;
+        this.audit = audit;
         this.clock = clock;
     }
 
@@ -59,6 +64,12 @@ public class InvestigationService {
      */
     @PreAuthorize("hasAnyRole('ANALYST', 'SENIOR_APPROVER')")
     public InvestigationView start(UUID alertId) {
+        return start(alertId, Channel.API);
+    }
+
+    /** The same, saying which door it came through - the console, or an MCP client. */
+    @PreAuthorize("hasAnyRole('ANALYST', 'SENIOR_APPROVER')")
+    public InvestigationView start(UUID alertId, Channel channel) {
         CurrentUser user = CurrentUser.get();
 
         AlertSnapshot alert;
@@ -87,6 +98,9 @@ public class InvestigationService {
         Investigation investigation = investigations.save(Investigation.start(alertId, alert.transactionId(),
                 alert.customerId(), alert.amount(), alert.currency(), planner, user.name(), user.clearance(),
                 clock.instant()));
+        audit.record(channel, "INVESTIGATION_STARTED", alertId.toString(), Outcome.OK,
+                "investigation " + investigation.getId() + ", " + planner + " plan, policy clearance "
+                        + investigation.getClearance());
         executor.execute(() -> runner.run(investigation.getId()));
         return InvestigationView.of(investigation);
     }
@@ -109,7 +123,13 @@ public class InvestigationService {
     public InvestigationView analystDecides(UUID id, InvestigationDecision.Action action, String comment) {
         String analyst = CurrentUser.get().name();
         Investigation investigation = find(id);
-        investigation.analystDecides(action, analyst, comment, clock.instant());
+        try {
+            investigation.analystDecides(action, analyst, comment, clock.instant());
+        } catch (IllegalStateException | IllegalArgumentException e) {
+            audit.refused(Channel.API, "DECISION", id.toString(), Outcome.DENIED, action + ": " + e.getMessage());
+            throw e;
+        }
+        audit.record(Channel.API, "DECISION", id.toString(), Outcome.OK, action + described(comment));
         if (action == InvestigationDecision.Action.CLOSE) {
             scoring.moveAlert(investigation.getAlertId(), "CLOSED");
         }
@@ -125,11 +145,22 @@ public class InvestigationService {
     public InvestigationView approverDecides(UUID id, InvestigationDecision.Action action, String comment) {
         String approver = CurrentUser.get().name();
         Investigation investigation = find(id);
-        investigation.approverDecides(action, approver, comment, clock.instant());
+        try {
+            investigation.approverDecides(action, approver, comment, clock.instant());
+        } catch (IllegalStateException | IllegalArgumentException e) {
+            // Includes the four-eyes refusal: an attempt to sign off one's own escalation is kept.
+            audit.refused(Channel.API, "SIGN_OFF", id.toString(), Outcome.DENIED, action + ": " + e.getMessage());
+            throw e;
+        }
+        audit.record(Channel.API, "SIGN_OFF", id.toString(), Outcome.OK, action + described(comment));
         if (action == InvestigationDecision.Action.APPROVE) {
             scoring.moveAlert(investigation.getAlertId(), "ESCALATED");
         }
         return InvestigationView.of(investigation);
+    }
+
+    private static String described(String comment) {
+        return comment == null || comment.isBlank() ? "" : " - " + comment.strip();
     }
 
     private Investigation find(UUID id) {

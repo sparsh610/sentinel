@@ -3,6 +3,8 @@ package com.sparsh.sentinel.copilot.agent.mcp;
 import com.sparsh.sentinel.copilot.agent.InvestigationService;
 import com.sparsh.sentinel.copilot.agent.InvestigationTools;
 import com.sparsh.sentinel.copilot.agent.client.ScoringClient;
+import com.sparsh.sentinel.copilot.audit.AuditEvent;
+import com.sparsh.sentinel.copilot.audit.AuditLog;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
@@ -26,9 +28,10 @@ class SentinelMcpToolsTest {
     @Mock private ScoringClient scoring;
     @Mock private InvestigationTools tools;
     @Mock private InvestigationService investigations;
+    @Mock private AuditLog audit;
 
     private SentinelMcpTools mcp() {
-        return new SentinelMcpTools(scoring, tools, investigations);
+        return new SentinelMcpTools(scoring, tools, investigations, audit);
     }
 
     private List<String> publishedNames() {
@@ -68,7 +71,21 @@ class SentinelMcpToolsTest {
         mcp().draftCaseNote(alert.toString());
 
         verify(tools).riskScore(alert);
-        verify(investigations).start(alert);
+        verify(investigations).start(alert, AuditEvent.Channel.MCP);
+    }
+
+    @Test
+    void everyCallIsAuditedWhetherItWorksOrNot() {
+        UUID alert = UUID.randomUUID();
+
+        mcp().riskScore(alert.toString());
+        assertThatThrownBy(() -> mcp().peerSegment("not-a-uuid")).isInstanceOf(IllegalArgumentException.class);
+
+        verify(audit).record(AuditEvent.Channel.MCP, "TOOL_CALL riskScore", alert.toString(), AuditEvent.Outcome.OK, null);
+        verify(audit).refused(org.mockito.ArgumentMatchers.eq(AuditEvent.Channel.MCP),
+                org.mockito.ArgumentMatchers.eq("TOOL_CALL peerSegment"), org.mockito.ArgumentMatchers.eq("not-a-uuid"),
+                org.mockito.ArgumentMatchers.eq(AuditEvent.Outcome.FAILED),
+                org.mockito.ArgumentMatchers.contains("transactionId must be a UUID"));
     }
 
     @Test

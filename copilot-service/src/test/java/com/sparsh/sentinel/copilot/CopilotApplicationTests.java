@@ -40,6 +40,9 @@ class CopilotApplicationTests {
     @MockitoBean
     private org.springframework.transaction.PlatformTransactionManager transactionManager;
 
+    @MockitoBean
+    private com.sparsh.sentinel.copilot.audit.AuditEventRepository auditEventRepository;
+
     @Autowired
     private com.sparsh.sentinel.copilot.agent.InvestigationService investigationService;
 

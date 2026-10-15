@@ -1,5 +1,8 @@
 package com.sparsh.sentinel.copilot.document;
 
+import com.sparsh.sentinel.copilot.audit.AuditEvent.Channel;
+import com.sparsh.sentinel.copilot.audit.AuditEvent.Outcome;
+import com.sparsh.sentinel.copilot.audit.AuditLog;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.ai.document.Document;
@@ -38,15 +41,18 @@ public class DocumentIngestionService {
     private final TokenTextSplitter splitter;
     private final DocumentRepository repository;
     private final DocumentTextExtractor extractor;
+    private final AuditLog audit;
 
     public DocumentIngestionService(VectorStore vectorStore,
                                     TokenTextSplitter splitter,
                                     DocumentRepository repository,
-                                    DocumentTextExtractor extractor) {
+                                    DocumentTextExtractor extractor,
+                                    AuditLog audit) {
         this.vectorStore = vectorStore;
         this.splitter = splitter;
         this.repository = repository;
         this.extractor = extractor;
+        this.audit = audit;
     }
 
     /**
@@ -116,6 +122,9 @@ public class DocumentIngestionService {
 
         log.info("Ingested '{}' ({}) as {} chunks, classification {}",
                 resolvedTitle, filename, chunks.size(), classification);
+
+        audit.record(Channel.API, "DOCUMENT_UPLOADED", documentId.toString(), Outcome.OK,
+                "'" + resolvedTitle + "' (" + filename + "), " + classification + ", " + chunks.size() + " chunks");
 
         return DocumentSummary.of(entity);
     }

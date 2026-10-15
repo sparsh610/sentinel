@@ -47,6 +47,7 @@ class MethodRulesTest {
     @MockitoBean private TaskExecutor executor;
     @MockitoBean private CaseNoteWriter noteWriter;
     @MockitoBean private AgentProperties properties;
+    @MockitoBean private com.sparsh.sentinel.copilot.audit.AuditLog audit;
 
     @Autowired private InvestigationService service;
 

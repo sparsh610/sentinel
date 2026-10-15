@@ -33,6 +33,7 @@ class EndpointRulesTest {
     @MockitoBean private JwtDecoder jwtDecoder;
     @MockitoBean private ClientRegistrationRepository registrations;
     @MockitoBean private OAuth2AuthorizedClientService authorizedClients;
+    @MockitoBean private com.sparsh.sentinel.copilot.audit.AuditLog audit;
 
     private final String investigation = "/api/investigations/" + UUID.randomUUID();
 

@@ -1,5 +1,7 @@
 package com.sparsh.sentinel.copilot.security;
 
+import com.sparsh.sentinel.copilot.audit.AuditEvent;
+import com.sparsh.sentinel.copilot.audit.AuditLog;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.http.HttpMethod;
@@ -16,6 +18,8 @@ import org.springframework.security.oauth2.client.OAuth2AuthorizedClientService;
 import org.springframework.security.oauth2.client.registration.ClientRegistrationRepository;
 import org.springframework.security.oauth2.client.web.client.OAuth2ClientHttpRequestInterceptor;
 import org.springframework.security.web.SecurityFilterChain;
+import org.springframework.security.web.access.AccessDeniedHandler;
+import org.springframework.security.web.access.AccessDeniedHandlerImpl;
 
 import static com.sparsh.sentinel.copilot.security.CurrentUser.ANALYST;
 import static com.sparsh.sentinel.copilot.security.CurrentUser.SENIOR_APPROVER;
@@ -36,10 +40,13 @@ public class SecurityConfig {
     static final String SERVICE_REGISTRATION = "copilot";
 
     @Bean
-    SecurityFilterChain api(HttpSecurity http) throws Exception {
+    SecurityFilterChain api(HttpSecurity http, AuditLog audit) throws Exception {
         http
                 .authorizeHttpRequests(auth -> auth
                         .requestMatchers("/actuator/health/**", "/actuator/info").permitAll()
+                        // Where Spring forwards a 4xx/5xx to render it: the original request was
+                        // already judged, so the forward must not be judged (and audited) again.
+                        .requestMatchers("/error").permitAll()
                         .requestMatchers(HttpMethod.POST, "/api/investigations/*/decision").hasRole(ANALYST)
                         .requestMatchers(HttpMethod.POST, "/api/investigations/*/sign-off").hasRole(SENIOR_APPROVER)
                         .requestMatchers(HttpMethod.POST, "/api/documents").hasRole(SENIOR_APPROVER)
@@ -47,10 +54,27 @@ public class SecurityConfig {
                         .requestMatchers("/api/**", "/mcp", "/mcp/**").hasAnyRole(ANALYST, SENIOR_APPROVER)
                         .anyRequest().denyAll())
                 .oauth2ResourceServer(oauth -> oauth.jwt(Customizer.withDefaults()))
+                .exceptionHandling(errors -> errors.accessDeniedHandler(auditedDenial(audit)))
                 // Bearer tokens, no cookies: nothing for a cross-site request to ride on.
                 .csrf(csrf -> csrf.disable())
                 .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS));
         return http.build();
+    }
+
+    /**
+     * A signed-in caller refused by a role check - at the URL or on a service method - goes in the
+     * audit log before the 403 goes back. (A request with no valid token has no one to name, and
+     * is answered 401 without a line.)
+     */
+    private static AccessDeniedHandler auditedDenial(AuditLog audit) {
+        AccessDeniedHandler forbidden = new AccessDeniedHandlerImpl();
+        return (request, response, denied) -> {
+            String path = request.getRequestURI();
+            AuditEvent.Channel channel = path.startsWith("/mcp") ? AuditEvent.Channel.MCP : AuditEvent.Channel.API;
+            audit.refused(channel, "ACCESS_DENIED", request.getMethod() + " " + path, AuditEvent.Outcome.DENIED,
+                    denied.getMessage());
+            forbidden.handle(request, response, denied);
+        };
     }
 
     /**

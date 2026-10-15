@@ -1,6 +1,9 @@
 package com.sparsh.sentinel.copilot.agent;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.sparsh.sentinel.copilot.audit.AuditEvent.Channel;
+import com.sparsh.sentinel.copilot.audit.AuditEvent.Outcome;
+import com.sparsh.sentinel.copilot.audit.AuditLog;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Component;
@@ -30,12 +33,13 @@ public class InvestigationRunner {
     private final AgentProperties properties;
     private final ObjectMapper json;
     private final TransactionTemplate transaction;
+    private final AuditLog audit;
     private final Clock clock;
 
     public InvestigationRunner(InvestigationRepository investigations, InvestigationStepRepository steps,
                                InvestigationTools tools, FixedPlanner fixedPlanner, LlmPlanner llmPlanner,
                                CaseNoteWriter noteWriter, AgentProperties properties, ObjectMapper json,
-                               PlatformTransactionManager transactionManager, Clock clock) {
+                               PlatformTransactionManager transactionManager, AuditLog audit, Clock clock) {
         this.investigations = investigations;
         this.steps = steps;
         this.tools = tools;
@@ -45,11 +49,13 @@ public class InvestigationRunner {
         this.properties = properties;
         this.json = json;
         this.transaction = new TransactionTemplate(transactionManager);
+        this.audit = audit;
         this.clock = clock;
     }
 
     public void run(UUID investigationId) {
         Investigation investigation = investigations.findById(investigationId).orElseThrow();
+        String actor = "agent for " + (investigation.getStartedBy() == null ? "unknown" : investigation.getStartedBy());
         StepRecorder recorder = new StepRecorder(investigation, properties.maxSteps(), steps, json, clock);
         Evidence evidence = new Evidence();
         evidence.clearance = investigation.getClearance();
@@ -60,6 +66,8 @@ public class InvestigationRunner {
                     .orElse(null);
             if (evidence.alert == null) {
                 finish(investigationId, i -> i.failed("The alert could not be read from scoring-service", clock.instant()));
+                audit.recordAs(actor, Channel.AGENT, "INVESTIGATION_FAILED", investigationId.toString(), Outcome.FAILED,
+                        "the alert could not be read from scoring-service");
                 return;
             }
 
@@ -74,10 +82,15 @@ public class InvestigationRunner {
                             () -> noteWriter.write(evidence))
                     .orElseGet(() -> CaseNoteWriter.template(evidence, "the note step failed"));
             finish(investigationId, i -> i.drafted(note.text(), note.source(), clock.instant()));
+            audit.recordAs(actor, Channel.AGENT, "CASE_NOTE_DRAFTED", investigationId.toString(), Outcome.OK,
+                    recorder.used() + " steps; note " + (note.source() == Investigation.NoteSource.MODEL
+                            ? "written by " + properties.model() : "from the template"));
             log.info("Investigation {} drafted in {} steps ({} note)", investigationId, recorder.used(), note.source());
         } catch (RuntimeException e) {
             log.error("Investigation {} failed", investigationId, e);
             finish(investigationId, i -> i.failed(e.getClass().getSimpleName() + ": " + e.getMessage(), clock.instant()));
+            audit.recordAs(actor, Channel.AGENT, "INVESTIGATION_FAILED", investigationId.toString(), Outcome.FAILED,
+                    e.getClass().getSimpleName());
         }
     }
 

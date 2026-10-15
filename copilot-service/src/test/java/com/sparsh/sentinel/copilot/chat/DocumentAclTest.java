@@ -27,11 +27,12 @@ class DocumentAclTest {
 
     @Mock private ChatClient chatClient;
     @Mock private VectorStore vectorStore;
+    @Mock private com.sparsh.sentinel.copilot.audit.AuditLog audit;
 
     private final CopilotProperties properties = new CopilotProperties(220, 150, 6, 0.55);
 
     private CopilotChatService service() {
-        return new CopilotChatService(chatClient, vectorStore, properties);
+        return new CopilotChatService(chatClient, vectorStore, properties, audit);
     }
 
     private String filterFor(Set<String> roles) {

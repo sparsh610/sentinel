@@ -33,6 +33,7 @@ class McpServerWiringTest {
     @MockitoBean private InvestigationRepository investigationRepository;
     @MockitoBean private InvestigationStepRepository investigationStepRepository;
     @MockitoBean private PlatformTransactionManager transactionManager;
+    @MockitoBean private com.sparsh.sentinel.copilot.audit.AuditEventRepository auditEventRepository;
 
     @Autowired
     private List<McpServerFeatures.SyncToolSpecification> sentinelTools;

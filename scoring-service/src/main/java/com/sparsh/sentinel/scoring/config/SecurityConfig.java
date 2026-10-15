@@ -28,6 +28,9 @@ public class SecurityConfig {
         http
                 .authorizeHttpRequests(auth -> auth
                         .requestMatchers("/actuator/health/**", "/actuator/info").permitAll()
+                        // Where Spring forwards a 4xx/5xx to render it: the original request was
+                        // already judged, so the forward must not be judged again.
+                        .requestMatchers("/error").permitAll()
                         .requestMatchers(HttpMethod.GET, "/api/alerts", "/api/alerts/*",
                                 "/api/transactions/*/peer-segment").hasAnyRole(ANALYST, SENIOR_APPROVER, SERVICE)
                         .requestMatchers(HttpMethod.PATCH, "/api/alerts/*/status").hasRole(SERVICE)

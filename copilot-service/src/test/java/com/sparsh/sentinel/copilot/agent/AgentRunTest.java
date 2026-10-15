@@ -55,6 +55,7 @@ class AgentRunTest {
     @Mock private CaseNoteWriter noteWriter;
     @Mock private ChatModel chatModel;
     @Mock private ToolCallingManager toolCallingManager;
+    @Mock private com.sparsh.sentinel.copilot.audit.AuditLog audit;
 
     private final ObjectMapper json = new ObjectMapper().registerModule(new JavaTimeModule());
     private final Clock clock = Clock.fixed(NOW, ZoneOffset.UTC);
@@ -88,7 +89,7 @@ class AgentRunTest {
         FixedPlanner fixed = new FixedPlanner(tools);
         LlmPlanner llm = new LlmPlanner(chatModel, toolCallingManager, fixed, properties);
         return new InvestigationRunner(investigations, steps, tools, fixed, llm, noteWriter, properties, json,
-                mock(PlatformTransactionManager.class), clock);
+                mock(PlatformTransactionManager.class), audit, clock);
     }
 
     private List<InvestigationStep> recordedSteps() {

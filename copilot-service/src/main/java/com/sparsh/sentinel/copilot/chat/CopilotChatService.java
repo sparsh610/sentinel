@@ -1,5 +1,8 @@
 package com.sparsh.sentinel.copilot.chat;
 
+import com.sparsh.sentinel.copilot.audit.AuditEvent.Channel;
+import com.sparsh.sentinel.copilot.audit.AuditEvent.Outcome;
+import com.sparsh.sentinel.copilot.audit.AuditLog;
 import com.sparsh.sentinel.copilot.config.CopilotProperties;
 import com.sparsh.sentinel.copilot.document.Classification;
 import com.sparsh.sentinel.copilot.document.DocumentIngestionService;
@@ -56,17 +59,21 @@ public class CopilotChatService {
     private final ChatClient chatClient;
     private final VectorStore vectorStore;
     private final CopilotProperties properties;
+    private final AuditLog audit;
 
     public CopilotChatService(ChatClient chatClient,
                               VectorStore vectorStore,
-                              CopilotProperties properties) {
+                              CopilotProperties properties,
+                              AuditLog audit) {
         this.chatClient = chatClient;
         this.vectorStore = vectorStore;
         this.properties = properties;
+        this.audit = audit;
     }
 
     public AnswerResponse ask(String question) {
         List<Citation> citations = retrieve(question, CurrentUser.get().clearance());
+        audited(question, citations);
 
         if (citations.isEmpty()) {
             return new AnswerResponse(
@@ -89,6 +96,7 @@ public class CopilotChatService {
      */
     public Stream stream(String question) {
         List<Citation> citations = retrieve(question, CurrentUser.get().clearance());
+        audited(question, citations);
 
         if (citations.isEmpty()) {
             return new Stream(List.of(), Flux.just("I don't have a source for that."), false);
@@ -155,6 +163,14 @@ public class CopilotChatService {
             ));
         }
         return citations;
+    }
+
+    /** Which sources a person was shown for a question - what they could have read, not only what they asked. */
+    private void audited(String question, List<Citation> citations) {
+        String sources = citations.stream().map(c -> c.title() + " #" + c.chunkIndex()).distinct()
+                .collect(java.util.stream.Collectors.joining(", "));
+        audit.record(Channel.API, "POLICY_QUESTION", null, Outcome.OK,
+                question + " -> " + (citations.isEmpty() ? "no source" : sources));
     }
 
     private static String buildUserMessage(String question, List<Citation> citations) {
