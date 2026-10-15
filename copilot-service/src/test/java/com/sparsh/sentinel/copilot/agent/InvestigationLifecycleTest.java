@@ -23,7 +23,7 @@ class InvestigationLifecycleTest {
         Investigation investigation = Investigation.start(UUID.randomUUID(), UUID.randomUUID(), "C-10001",
                 new BigDecimal("9500"), "EUR", AgentProperties.Planner.FIXED, "alex.analyst",
                 CurrentUser.clearanceFor(Set.of(CurrentUser.ANALYST)), NOW);
-        investigation.drafted("note", Investigation.NoteSource.TEMPLATE, NOW);
+        investigation.drafted("note", "note", Investigation.NoteSource.TEMPLATE, NOW);
         return investigation;
     }
 

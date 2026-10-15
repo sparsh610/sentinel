@@ -51,7 +51,11 @@ public class CaseNoteWriter {
         this.properties = properties;
     }
 
-    public record CaseNote(String text, Investigation.NoteSource source) {
+    /**
+     * @param text       for the analyst: what the model wrote, with the masked names put back
+     * @param maskedText exactly what the model wrote, tokens and all - what an MCP client is shown
+     */
+    public record CaseNote(String text, String maskedText, Investigation.NoteSource source) {
     }
 
     /** Whether the chat model runs on this machine - the condition for sending it customer data. */
@@ -67,13 +71,14 @@ public class CaseNoteWriter {
             String text = chatClient.prompt()
                     .options(ChatOptions.builder().model(properties.model()).temperature(0.1).build())
                     .system(SYSTEM)
-                    .user(evidence.describe())
+                    .user(evidence.describeForModel())
                     .call()
                     .content();
             if (text == null || text.isBlank()) {
                 return template(evidence, "the model returned nothing");
             }
-            return new CaseNote(text.strip(), Investigation.NoteSource.MODEL);
+            String masked = text.strip();
+            return new CaseNote(evidence.privacy.unmask(masked), masked, Investigation.NoteSource.MODEL);
         } catch (RuntimeException e) {
             log.warn("Case note model unavailable, using the template: {}", e.getMessage());
             return template(evidence, "the local model was unavailable");
@@ -86,6 +91,6 @@ public class CaseNoteWriter {
                 + evidence.describe()
                 + "\nRecommendation: for the analyst to decide. An escalation needs a senior approver's "
                 + "sign-off before it is reported (AML-05.2).";
-        return new CaseNote(text, Investigation.NoteSource.TEMPLATE);
+        return new CaseNote(text, evidence.forModel(text), Investigation.NoteSource.TEMPLATE);
     }
 }

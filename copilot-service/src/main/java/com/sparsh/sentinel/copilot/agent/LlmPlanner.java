@@ -86,7 +86,7 @@ public class LlmPlanner {
                 .toolCallbacks(List.of(ToolCallbacks.from(new BoundTools(evidence, steps))))
                 .internalToolExecutionEnabled(false)
                 .build();
-        Prompt prompt = new Prompt(List.of(new SystemMessage(SYSTEM), new UserMessage(evidence.describe())), options);
+        Prompt prompt = new Prompt(List.of(new SystemMessage(SYSTEM), new UserMessage(evidence.describeForModel())), options);
 
         ChatResponse response = chatModel.call(prompt);
         // Each round asks for at least one call, and every call spends budget or is refused, so
@@ -114,7 +114,7 @@ public class LlmPlanner {
                 description = "The customer's recent transactions: totals in and out, cash count, counterparties.")
         public String customerHistory() {
             plan.customerHistory(evidence, steps, BY_MODEL);
-            return evidence.history == null ? "Not available." : evidence.history.toString();
+            return evidence.history == null ? "Not available." : evidence.forModel(evidence.history.toString());
         }
 
         @Tool(name = InvestigationTools.PEER_SEGMENT,

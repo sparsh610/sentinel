@@ -6,6 +6,8 @@ import com.sparsh.sentinel.copilot.audit.AuditLog;
 import com.sparsh.sentinel.copilot.config.CopilotProperties;
 import com.sparsh.sentinel.copilot.document.Classification;
 import com.sparsh.sentinel.copilot.document.DocumentIngestionService;
+import com.sparsh.sentinel.copilot.privacy.MaskingSession;
+import com.sparsh.sentinel.copilot.privacy.PiiMasker;
 import com.sparsh.sentinel.copilot.security.CurrentUser;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -60,15 +62,18 @@ public class CopilotChatService {
     private final VectorStore vectorStore;
     private final CopilotProperties properties;
     private final AuditLog audit;
+    private final PiiMasker masker;
 
     public CopilotChatService(ChatClient chatClient,
                               VectorStore vectorStore,
                               CopilotProperties properties,
-                              AuditLog audit) {
+                              AuditLog audit,
+                              PiiMasker masker) {
         this.chatClient = chatClient;
         this.vectorStore = vectorStore;
         this.properties = properties;
         this.audit = audit;
+        this.masker = masker;
     }
 
     public AnswerResponse ask(String question) {
@@ -80,11 +85,14 @@ public class CopilotChatService {
                     "I don't have a source for that.", List.of(), false);
         }
 
-        String answer = chatClient.prompt()
+        // An IBAN, card number or e-mail address in the question or a policy excerpt goes to the
+        // model as a token - with the cloud profile, that model is a third party's.
+        MaskingSession privacy = masker.session();
+        String answer = privacy.unmask(chatClient.prompt()
                 .system(SYSTEM_PROMPT)
-                .user(buildUserMessage(question, citations))
+                .user(privacy.mask(buildUserMessage(question, citations)))
                 .call()
-                .content();
+                .content());
 
         return new AnswerResponse(answer, citations, true);
     }
@@ -102,11 +110,15 @@ public class CopilotChatService {
             return new Stream(List.of(), Flux.just("I don't have a source for that."), false);
         }
 
+        // Masked on the way out as in ask(). Each streamed chunk is unmasked on its own, so a token
+        // the model happens to split across two chunks stays masked in the stream - the safe way to fail.
+        MaskingSession privacy = masker.session();
         Flux<String> tokens = chatClient.prompt()
                 .system(SYSTEM_PROMPT)
-                .user(buildUserMessage(question, citations))
+                .user(privacy.mask(buildUserMessage(question, citations)))
                 .stream()
-                .content();
+                .content()
+                .map(privacy::unmask);
 
         return new Stream(citations, tokens, true);
     }

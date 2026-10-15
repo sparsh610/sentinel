@@ -7,6 +7,7 @@ import com.sparsh.sentinel.copilot.agent.client.ScoringClient.PeerSegment;
 import com.sparsh.sentinel.copilot.agent.client.ServiceUnavailableException;
 import com.sparsh.sentinel.copilot.chat.Citation;
 import com.sparsh.sentinel.copilot.document.Classification;
+import com.sparsh.sentinel.copilot.privacy.PiiMasker;
 import com.sparsh.sentinel.copilot.security.CurrentUser;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -48,6 +49,7 @@ class AgentRunTest {
     private static final Instant NOW = Instant.parse("2026-10-01T10:00:00Z");
     private static final UUID ALERT = UUID.randomUUID();
     private static final UUID TX = UUID.randomUUID();
+    private static final PiiMasker MASKER = new PiiMasker("test-key");
 
     @Mock private InvestigationRepository investigations;
     @Mock private InvestigationStepRepository steps;
@@ -69,11 +71,11 @@ class AgentRunTest {
     void wiring() {
         when(tools.riskScore(ALERT)).thenReturn(ALERT_SNAPSHOT);
         when(tools.customerHistory("C-20001")).thenReturn(new Evidence.History(3, new BigDecimal("29400"),
-                BigDecimal.ZERO, 3, 0, Set.of(), List.of()));
+                BigDecimal.ZERO, 3, 0, Set.of(), List.of(), Set.of()));
         when(tools.peerSegment(TX)).thenReturn(new PeerSegment(TX, 0, -0.02, -0.12, false));
         when(tools.policyLookup(any(), any())).thenReturn(List.of(
                 new Citation(1, UUID.randomUUID(), "Internal AML Policy", 1, 0.8, "AML-04.2 Where three or more...")));
-        when(noteWriter.write(any())).thenReturn(new CaseNoteWriter.CaseNote("Summary: ...", Investigation.NoteSource.MODEL));
+        when(noteWriter.write(any())).thenReturn(new CaseNoteWriter.CaseNote("Summary: ...", "Summary: ...", Investigation.NoteSource.MODEL));
         when(noteWriter.modelIsLocal()).thenReturn(true);
     }
 
@@ -89,7 +91,7 @@ class AgentRunTest {
         FixedPlanner fixed = new FixedPlanner(tools);
         LlmPlanner llm = new LlmPlanner(chatModel, toolCallingManager, fixed, properties);
         return new InvestigationRunner(investigations, steps, tools, fixed, llm, noteWriter, properties, json,
-                mock(PlatformTransactionManager.class), audit, clock);
+                mock(PlatformTransactionManager.class), audit, MASKER, clock);
     }
 
     private List<InvestigationStep> recordedSteps() {
@@ -166,6 +168,24 @@ class AgentRunTest {
         verify(noteWriter, never()).write(any());
     }
 
+    /** Design decision §6: the model reads tokens, never the counterparty's name. */
+    @Test
+    void theModelNeverSeesACounterpartysName() {
+        start(AgentProperties.Planner.LLM);
+        when(tools.riskScore(ALERT)).thenReturn(new AlertSnapshot(ALERT, TX, "C-20001", "BUSINESS", "DEBIT",
+                "TRANSFER", new BigDecimal("9800"), "EUR", "Kessler Bau GmbH", "IR", NOW, new BigDecimal("0.9"),
+                "IN_REVIEW", List.of(new AlertSnapshot.Finding("HIGH_RISK_JURISDICTION", new BigDecimal("0.9"),
+                "Transfer to Kessler Bau GmbH in IR"))));
+        ChatResponse noToolCalls = mock(ChatResponse.class);
+        when(chatModel.call(any(Prompt.class))).thenReturn(noToolCalls);
+        ArgumentCaptor<Prompt> prompt = ArgumentCaptor.forClass(Prompt.class);
+
+        runner(6).run(investigation.getId());
+
+        verify(chatModel).call(prompt.capture());
+        assertThat(prompt.getValue().getContents()).doesNotContain("Kessler").contains("PARTY-", "C-20001");
+    }
+
     @Test
     void whenTheModelPlannerCallsNoToolsThePlanFillsTheGapsAndSaysSo() {
         start(AgentProperties.Planner.LLM);
@@ -201,7 +221,7 @@ class AgentRunTest {
 
     @Test
     void policyFromSeveralLookupsIsNumberedOnceAndInOrder() {
-        Evidence evidence = new Evidence();
+        Evidence evidence = new Evidence(MASKER.session());
         UUID doc = UUID.randomUUID();
         evidence.addPolicy(List.of(new Citation(1, doc, "Policy", 4, 0.9, "a"), new Citation(2, doc, "Policy", 5, 0.8, "b")));
         evidence.addPolicy(List.of(new Citation(1, doc, "Policy", 5, 0.8, "b"), new Citation(2, doc, "Policy", 6, 0.7, "c")));
@@ -213,7 +233,7 @@ class AgentRunTest {
 
     @Test
     void theEvidenceNamesTheClausesEachPolicyExcerptContains() {
-        Evidence evidence = new Evidence();
+        Evidence evidence = new Evidence(MASKER.session());
         evidence.addPolicy(List.of(new Citation(1, UUID.randomUUID(), "Internal AML Policy", 1, 0.8,
                 "AML-04  Structuring\nAML-04.1  Structuring is ...\nAML-04.2  Where three or more ...")));
 
@@ -226,7 +246,7 @@ class AgentRunTest {
                 "http://scoring", "http://ingest", 20);
         CaseNoteWriter writer = new CaseNoteWriter(mock(org.springframework.ai.chat.client.ChatClient.class),
                 chatModel, properties);
-        Evidence evidence = new Evidence();
+        Evidence evidence = new Evidence(MASKER.session());
         evidence.alert = ALERT_SNAPSHOT;
 
         CaseNoteWriter.CaseNote note = writer.write(evidence);

@@ -32,7 +32,8 @@ class DocumentAclTest {
     private final CopilotProperties properties = new CopilotProperties(220, 150, 6, 0.55);
 
     private CopilotChatService service() {
-        return new CopilotChatService(chatClient, vectorStore, properties, audit);
+        return new CopilotChatService(chatClient, vectorStore, properties, audit,
+                new com.sparsh.sentinel.copilot.privacy.PiiMasker("test-key"));
     }
 
     private String filterFor(Set<String> roles) {

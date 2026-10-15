@@ -11,6 +11,8 @@ import com.sparsh.sentinel.copilot.audit.AuditEvent.Channel;
 import com.sparsh.sentinel.copilot.audit.AuditEvent.Outcome;
 import com.sparsh.sentinel.copilot.audit.AuditLog;
 import com.sparsh.sentinel.copilot.chat.Citation;
+import com.sparsh.sentinel.copilot.privacy.MaskingSession;
+import com.sparsh.sentinel.copilot.privacy.PiiMasker;
 import com.sparsh.sentinel.copilot.security.CurrentUser;
 import org.springframework.ai.tool.annotation.Tool;
 import org.springframework.ai.tool.annotation.ToolParam;
@@ -18,6 +20,8 @@ import org.springframework.security.access.AccessDeniedException;
 import org.springframework.stereotype.Component;
 
 import java.util.List;
+import java.util.Set;
+import java.util.TreeSet;
 import java.util.UUID;
 import java.util.function.Supplier;
 
@@ -29,6 +33,11 @@ import java.util.function.Supplier;
  * <p><b>No tool here can decide a case.</b> They read, and {@code draftCaseNote} drafts. Escalating,
  * closing and signing off stay in the console, behind a named person (design decision §8). A test
  * fails if a tool whose name suggests a decision is ever added.
+ *
+ * <p><b>Everything returned is masked.</b> The client on the other end is a hosted model, so
+ * counterparty names, IBANs, card numbers and e-mail addresses leave as stable tokens
+ * ({@link PiiMasker}): the same party is the same token in every result and in the case note, so
+ * the model can still connect them without learning who they are.
  *
  * <p>Every call is an {@code audit_event} - who, which tool, with what, and whether it was allowed -
  * written in the name on the client's token.
@@ -42,13 +51,15 @@ public class SentinelMcpTools {
     private final InvestigationTools tools;
     private final InvestigationService investigations;
     private final AuditLog audit;
+    private final PiiMasker masker;
 
     public SentinelMcpTools(ScoringClient scoring, InvestigationTools tools, InvestigationService investigations,
-                            AuditLog audit) {
+                            AuditLog audit, PiiMasker masker) {
         this.scoring = scoring;
         this.tools = tools;
         this.investigations = investigations;
         this.audit = audit;
+        this.masker = masker;
     }
 
     @Tool(name = "listOpenAlerts", resultConverter = IsoDateResultConverter.class, description = """
@@ -57,14 +68,18 @@ public class SentinelMcpTools {
     public List<AlertSnapshot> listOpenAlerts(
             @ToolParam(description = "How many alerts, 1-50", required = false) Integer limit) {
         int n = limit == null ? 20 : Math.max(1, Math.min(limit, MAX_ALERTS));
-        return audited("listOpenAlerts", null, "limit=" + n, () -> scoring.openAlerts(n));
+        return audited("listOpenAlerts", null, "limit=" + n, () -> {
+            MaskingSession privacy = masker.session();
+            return scoring.openAlerts(n).stream().map(a -> masked(a, privacy)).toList();
+        });
     }
 
     @Tool(name = "riskScore", resultConverter = IsoDateResultConverter.class, description = """
             One alert in full: the transaction it was raised on, its overall score, and every finding
             with its score and the reason it fired.""")
     public AlertSnapshot riskScore(@ToolParam(description = "The alert's id (a UUID)") String alertId) {
-        return audited("riskScore", alertId, null, () -> tools.riskScore(uuid(alertId, "alertId")));
+        return audited("riskScore", alertId, null,
+                () -> masked(tools.riskScore(uuid(alertId, "alertId")), masker.session()));
     }
 
     @Tool(name = "customerHistory", resultConverter = IsoDateResultConverter.class, description = """
@@ -72,7 +87,7 @@ public class SentinelMcpTools {
             transactions, distinct counterparties and their countries, and the newest few.""")
     public Evidence.History customerHistory(
             @ToolParam(description = "The customer's id, e.g. C-20001") String customerId) {
-        return audited("customerHistory", customerId, null, () -> tools.customerHistory(customerId));
+        return audited("customerHistory", customerId, null, () -> masked(tools.customerHistory(customerId)));
     }
 
     @Tool(name = "peerSegment", resultConverter = IsoDateResultConverter.class, description = """
@@ -91,7 +106,10 @@ public class SentinelMcpTools {
     public List<Citation> policyLookup(
             @ToolParam(description = "What to look up, e.g. 'structuring reporting threshold'") String question) {
         return audited("policyLookup", null, question,
-                () -> tools.policyLookup(question, CurrentUser.get().clearance()));
+                () -> tools.policyLookup(question, CurrentUser.get().clearance()).stream()
+                        .map(c -> new Citation(c.marker(), c.documentId(), c.title(), c.chunkIndex(), c.score(),
+                                masker.maskPatterns(c.excerpt())))
+                        .toList());
     }
 
     @Tool(name = "draftCaseNote", resultConverter = IsoDateResultConverter.class, description = """
@@ -101,7 +119,7 @@ public class SentinelMcpTools {
             This only drafts - it cannot escalate, close or report a case; people do that.""")
     public InvestigationView draftCaseNote(@ToolParam(description = "The alert's id (a UUID)") String alertId) {
         return audited("draftCaseNote", alertId, null,
-                () -> investigations.start(uuid(alertId, "alertId"), Channel.MCP));
+                () -> forModel(investigations.start(uuid(alertId, "alertId"), Channel.MCP)));
     }
 
     @Tool(name = "getInvestigation", resultConverter = IsoDateResultConverter.class, description = """
@@ -110,7 +128,40 @@ public class SentinelMcpTools {
     public InvestigationView getInvestigation(
             @ToolParam(description = "The investigation's id (a UUID), from draftCaseNote") String investigationId) {
         return audited("getInvestigation", investigationId, null,
-                () -> investigations.get(uuid(investigationId, "investigationId")));
+                () -> forModel(investigations.get(uuid(investigationId, "investigationId"))));
+    }
+
+    /** The alert with its counterparty as a token - in its own field and inside the findings' reasons. */
+    private static AlertSnapshot masked(AlertSnapshot a, MaskingSession privacy) {
+        if (a == null) {
+            return null;
+        }
+        String party = privacy.party(a.counterpartyName());
+        List<AlertSnapshot.Finding> findings = a.findings() == null ? null : a.findings().stream()
+                .map(f -> new AlertSnapshot.Finding(f.rule(), f.score(), privacy.mask(f.reason())))
+                .toList();
+        return new AlertSnapshot(a.id(), a.transactionId(), a.customerId(), a.customerSegment(), a.direction(),
+                a.channel(), a.amount(), a.currency(), party, a.counterpartyCountry(), a.bookedAt(), a.score(),
+                a.status(), findings);
+    }
+
+    /** The history with every counterparty as a token, in the summary lines as well. */
+    private Evidence.History masked(Evidence.History h) {
+        if (h == null) {
+            return null;
+        }
+        MaskingSession privacy = masker.session();
+        Set<String> tokens = new TreeSet<>();
+        if (h.counterpartyNames() != null) {
+            h.counterpartyNames().forEach(name -> tokens.add(privacy.party(name)));
+        }
+        return new Evidence.History(h.transactions(), h.moneyIn(), h.moneyOut(), h.cashTransactions(),
+                h.distinctCounterparties(), h.counterpartyCountries(),
+                h.recent().stream().map(privacy::mask).toList(), tokens);
+    }
+
+    private static InvestigationView forModel(InvestigationView view) {
+        return view == null ? null : view.forModel();
     }
 
     /** Runs one tool call and writes its audit line - OK, DENIED by a role check, or FAILED. */

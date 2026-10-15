@@ -73,14 +73,15 @@ public class InvestigationTools {
                 countries.add(t.counterpartyCountry());
             }
         }
-        int counterparties = (int) recent.stream().map(IngestClient.Transaction::counterpartyName)
-                .filter(Objects::nonNull).distinct().count();
+        Set<String> names = new TreeSet<>();
+        recent.stream().map(IngestClient.Transaction::counterpartyName).filter(Objects::nonNull).forEach(names::add);
+        int counterparties = names.size();
         List<String> lines = recent.stream().limit(RECENT_IN_NOTE)
                 .map(t -> "%s %s %s %s %s%s".formatted(t.bookedAt(), t.direction().toLowerCase(),
                         t.channel().toLowerCase(), t.currency(), t.amount().toPlainString(),
                         t.counterpartyName() == null ? "" : " with " + t.counterpartyName()))
                 .toList();
-        return new Evidence.History(recent.size(), in, out, cash, counterparties, countries, lines);
+        return new Evidence.History(recent.size(), in, out, cash, counterparties, countries, lines, names);
     }
 
     /** Where the alerted transaction sits among its peers, from scoring-service's models. */

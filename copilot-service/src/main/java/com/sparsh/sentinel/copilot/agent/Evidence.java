@@ -1,9 +1,11 @@
 package com.sparsh.sentinel.copilot.agent;
 
+import com.fasterxml.jackson.annotation.JsonIgnore;
 import com.sparsh.sentinel.copilot.agent.client.ScoringClient.AlertSnapshot;
 import com.sparsh.sentinel.copilot.agent.client.ScoringClient.PeerSegment;
 import com.sparsh.sentinel.copilot.chat.Citation;
 import com.sparsh.sentinel.copilot.document.Classification;
+import com.sparsh.sentinel.copilot.privacy.MaskingSession;
 
 import java.math.BigDecimal;
 import java.util.ArrayList;
@@ -14,8 +16,15 @@ import java.util.Set;
 /**
  * What the tools found for one investigation, filled in as they run. The case note is written
  * from this and nothing else - not from the model's general knowledge.
+ *
+ * <p>The model sees it only through {@link #describeForModel()}: counterparty names, IBANs, card
+ * numbers and e-mail addresses replaced by tokens (design decision §6). The analyst's copy of the
+ * note has them put back.
  */
 public final class Evidence {
+
+    /** Masks what goes to the model for this run, and unmasks what comes back. */
+    final MaskingSession privacy;
 
     AlertSnapshot alert;
     History history;
@@ -26,11 +35,34 @@ public final class Evidence {
     /** The policy the person this run is for may see; the policy lookup is held to it. */
     Set<Classification> clearance = EnumSet.of(Classification.PUBLIC);
 
+    Evidence(MaskingSession privacy) {
+        this.privacy = privacy;
+    }
+
     /**
-     * @param recent the newest few, for the note; the totals cover everything read.
+     * @param recent            the newest few, for the note; the totals cover everything read.
+     * @param counterpartyNames who the customer dealt with - kept so they can be masked wherever
+     *                          they appear, and never written to the trace or a tool result.
      */
     public record History(int transactions, BigDecimal moneyIn, BigDecimal moneyOut, int cashTransactions,
-                   int distinctCounterparties, Set<String> counterpartyCountries, List<String> recent) {
+                   int distinctCounterparties, Set<String> counterpartyCountries, List<String> recent,
+                   @JsonIgnore Set<String> counterpartyNames) {
+    }
+
+    /** The evidence as the model may see it. */
+    String describeForModel() {
+        return forModel(describe());
+    }
+
+    /** Any text about this evidence, masked for the model - including tool results the LLM planner reads. */
+    String forModel(String text) {
+        if (alert != null) {
+            privacy.party(alert.counterpartyName());
+        }
+        if (history != null && history.counterpartyNames() != null) {
+            history.counterpartyNames().forEach(privacy::party);
+        }
+        return privacy.mask(text);
     }
 
     /** Adds excerpts not already held, renumbering so the markers stay 1, 2, 3 across lookups. */

@@ -4,6 +4,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.sparsh.sentinel.copilot.audit.AuditEvent.Channel;
 import com.sparsh.sentinel.copilot.audit.AuditEvent.Outcome;
 import com.sparsh.sentinel.copilot.audit.AuditLog;
+import com.sparsh.sentinel.copilot.privacy.PiiMasker;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Component;
@@ -34,12 +35,14 @@ public class InvestigationRunner {
     private final ObjectMapper json;
     private final TransactionTemplate transaction;
     private final AuditLog audit;
+    private final PiiMasker masker;
     private final Clock clock;
 
     public InvestigationRunner(InvestigationRepository investigations, InvestigationStepRepository steps,
                                InvestigationTools tools, FixedPlanner fixedPlanner, LlmPlanner llmPlanner,
                                CaseNoteWriter noteWriter, AgentProperties properties, ObjectMapper json,
-                               PlatformTransactionManager transactionManager, AuditLog audit, Clock clock) {
+                               PlatformTransactionManager transactionManager, AuditLog audit, PiiMasker masker,
+                               Clock clock) {
         this.investigations = investigations;
         this.steps = steps;
         this.tools = tools;
@@ -50,6 +53,7 @@ public class InvestigationRunner {
         this.json = json;
         this.transaction = new TransactionTemplate(transactionManager);
         this.audit = audit;
+        this.masker = masker;
         this.clock = clock;
     }
 
@@ -57,7 +61,7 @@ public class InvestigationRunner {
         Investigation investigation = investigations.findById(investigationId).orElseThrow();
         String actor = "agent for " + (investigation.getStartedBy() == null ? "unknown" : investigation.getStartedBy());
         StepRecorder recorder = new StepRecorder(investigation, properties.maxSteps(), steps, json, clock);
-        Evidence evidence = new Evidence();
+        Evidence evidence = new Evidence(masker.session());
         evidence.clearance = investigation.getClearance();
         try {
             evidence.alert = recorder.run(InvestigationTools.RISK_SCORE,
@@ -81,10 +85,11 @@ public class InvestigationRunner {
             CaseNoteWriter.CaseNote note = recorder.run(StepRecorder.DRAFT_CASE_NOTE, Map.of("writer", writer),
                             () -> noteWriter.write(evidence))
                     .orElseGet(() -> CaseNoteWriter.template(evidence, "the note step failed"));
-            finish(investigationId, i -> i.drafted(note.text(), note.source(), clock.instant()));
+            finish(investigationId, i -> i.drafted(note.text(), note.maskedText(), note.source(), clock.instant()));
             audit.recordAs(actor, Channel.AGENT, "CASE_NOTE_DRAFTED", investigationId.toString(), Outcome.OK,
                     recorder.used() + " steps; note " + (note.source() == Investigation.NoteSource.MODEL
-                            ? "written by " + properties.model() : "from the template"));
+                            ? "written by " + properties.model() : "from the template") + "; "
+                            + evidence.privacy.maskedCount() + " personal values masked from the model");
             log.info("Investigation {} drafted in {} steps ({} note)", investigationId, recorder.used(), note.source());
         } catch (RuntimeException e) {
             log.error("Investigation {} failed", investigationId, e);

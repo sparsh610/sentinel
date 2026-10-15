@@ -66,6 +66,10 @@ public class Investigation {
     @Column(name = "case_note")
     private String caseNote;
 
+    /** The note as the model wrote it, personal data still masked - the copy MCP clients see. */
+    @Column(name = "case_note_masked")
+    private String caseNoteMasked;
+
     @Enumerated(EnumType.STRING)
     @Column(name = "note_source", length = 8)
     private NoteSource noteSource;
@@ -122,9 +126,10 @@ public class Investigation {
         return status == Status.RUNNING || status == Status.DRAFTED || status == Status.AWAITING_SIGN_OFF;
     }
 
-    void drafted(String note, NoteSource source, Instant now) {
+    void drafted(String note, String maskedNote, NoteSource source, Instant now) {
         require(Status.RUNNING, "draft a note");
         caseNote = note;
+        caseNoteMasked = maskedNote;
         noteSource = source;
         status = Status.DRAFTED;
         finishedAt = now;
@@ -212,6 +217,10 @@ public class Investigation {
 
     public String getCaseNote() {
         return caseNote;
+    }
+
+    public String getCaseNoteMasked() {
+        return caseNoteMasked;
     }
 
     public NoteSource getNoteSource() {
